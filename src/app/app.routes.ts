@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -7,32 +8,43 @@ export const routes: Routes = [
     pathMatch: 'full',
   },
   {
+    path: 'login',
+    loadComponent: () =>
+      import('./features/login/login.component').then((m) => m.LoginComponent),
+  },
+  {
     path: 'dashboard',
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
   },
   {
     path: 'wallets',
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./features/wallets/wallets.component').then((m) => m.WalletsComponent),
   },
   {
     path: 'debts',
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./features/debts/debts.component').then((m) => m.DebtsComponent),
   },
   {
     path: 'income',
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./features/income/income.component').then((m) => m.IncomeComponent),
   },
   {
     path: 'budget',
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./features/budget/budget.component').then((m) => m.BudgetComponent),
   },
   {
     path: 'analytics',
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./features/analytics/analytics.component').then((m) => m.AnalyticsComponent),
   },
