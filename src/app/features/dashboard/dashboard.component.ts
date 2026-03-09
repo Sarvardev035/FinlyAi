@@ -1,7 +1,10 @@
 import { Component, ChangeDetectionStrategy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { GlassCardComponent, UzsFormatPipe, UsdFormatPipe } from '../../shared';
+import { UzsFormatPipe } from '../../shared';
+import { AnimStatCardComponent } from '../../shared/components/anim-stat-card/anim-stat-card.component';
+import { AnimTransactionListComponent } from '../../shared/components/anim-transaction-list/anim-transaction-list.component';
+import { AnimCashflowChartComponent, CashflowBar } from '../../shared/components/anim-cashflow-chart/anim-cashflow-chart.component';
 import { AccountService, TransactionService, IncomeService, DebtService, CurrencyService, FamilyService } from '../../core/services';
 import { Account, FamilyMember, FamilyPermission } from '../../models';
 import { TransactionCategory } from '../../models/transaction.model';
@@ -9,7 +12,7 @@ import { TransactionCategory } from '../../models/transaction.model';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, GlassCardComponent, UzsFormatPipe, UsdFormatPipe],
+  imports: [CommonModule, FormsModule, UzsFormatPipe, AnimStatCardComponent, AnimTransactionListComponent, AnimCashflowChartComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dashboard">
@@ -19,29 +22,23 @@ import { TransactionCategory } from '../../models/transaction.model';
         <p class="hero__subtitle">Here's your financial overview</p>
       </div>
 
-      <!-- Stats Row -->
-      <div class="stats-row">
-        <div class="stat-pill anim-fade-up anim-d1">
-          <span class="stat-pill__icon">💰</span>
-          <div class="stat-pill__text">
-            <span class="stat-pill__label">Net Worth</span>
-            <span class="stat-pill__value">{{ accountService.summary().totalBalanceUZS | uzsFormat }}</span>
-          </div>
-        </div>
-        <div class="stat-pill stat-pill--success anim-fade-up anim-d2">
-          <span class="stat-pill__icon">📈</span>
-          <div class="stat-pill__text">
-            <span class="stat-pill__label">Income</span>
-            <span class="stat-pill__value">{{ incomeService.totalIncome() | uzsFormat }}</span>
-          </div>
-        </div>
-        <div class="stat-pill stat-pill--danger anim-fade-up anim-d3">
-          <span class="stat-pill__icon">📉</span>
-          <div class="stat-pill__text">
-            <span class="stat-pill__label">Expenses</span>
-            <span class="stat-pill__value">{{ transactionService.totalExpenses() | uzsFormat }}</span>
-          </div>
-        </div>
+      <!-- Animated Stat Cards -->
+      <div class="stat-cards-row">
+        <app-anim-stat-card
+          [value]="accountService.summary().totalBalanceUZS"
+          label="Net Worth"
+          variant="networth"
+        />
+        <app-anim-stat-card
+          [value]="incomeService.totalIncome()"
+          label="Total Income"
+          variant="income"
+        />
+        <app-anim-stat-card
+          [value]="transactionService.totalExpenses()"
+          label="Expenses"
+          variant="expense"
+        />
       </div>
 
       <!-- Wallets -->
@@ -140,6 +137,12 @@ import { TransactionCategory } from '../../models/transaction.model';
         </div>
       }
 
+      <!-- Cashflow Chart + Transaction List -->
+      <div class="cashflow-grid">
+        <app-anim-cashflow-chart [data]="cashflowBars()" />
+        <app-anim-transaction-list [transactions]="transactionService.recentTransactions()" />
+      </div>
+
       <!-- Debt Alerts -->
       @if (debtService.urgentAlerts().length > 0) {
         <div class="section anim-fade-up anim-d5">
@@ -169,10 +172,106 @@ import { TransactionCategory } from '../../models/transaction.model';
             <h3 class="section-title">👨‍👩‍👧‍👦 Family</h3>
             <p class="section-hint">Manage money with family members</p>
           </div>
-          <button class="add-btn" (click)="showAddFamily.set(!showAddFamily())">
-            {{ showAddFamily() ? '✕' : '+ Add' }}
-          </button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="add-btn" style="background: rgba(255, 169, 77, 0.15); color: var(--warning);" (click)="showSplitGather.set(!showSplitGather())">
+              {{ showSplitGather() ? '✕' : '🍕 Split' }}
+            </button>
+            <button class="add-btn" (click)="showAddFamily.set(!showAddFamily())">
+              {{ showAddFamily() ? '✕' : '+ Add' }}
+            </button>
+          </div>
         </div>
+
+        <!-- Split & Gather Form -->
+        @if (showSplitGather()) {
+          <div class="add-family-form anim-scale-in" style="margin-bottom: 1rem; border: 1px solid var(--warning);">
+            <div style="margin-bottom: 0.75rem;">
+              <h4 style="font-size: 0.9rem; margin-bottom: 0.4rem; color: #fff;">Split & Gather Money</h4>
+              <p style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">Evenly divide bill and request/give to members.</p>
+            </div>
+
+            <!-- Action Tabs -->
+            <div class="action-tabs" style="margin-bottom: 0.75rem;">
+              <button
+                class="action-tab"
+                [class.action-tab--active]="splitAction() === 'gather'"
+                [class.action-tab--income]="splitAction() === 'gather'"
+                (click)="splitAction.set('gather')"
+              >💰 Gather (They pay you)</button>
+              <button
+                class="action-tab"
+                [class.action-tab--active]="splitAction() === 'split'"
+                [class.action-tab--expense]="splitAction() === 'split'"
+                (click)="splitAction.set('split')"
+              >💸 Split (You pay them)</button>
+            </div>
+
+            <!-- Member Selection -->
+            <div class="family-grid" style="margin-bottom: 0.75rem; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">
+              @for (member of familyService.allMembers(); track member.id) {
+                <button
+                  class="family-card"
+                  [class.family-card--selected]="splitSelectedMembers().has(member.id)"
+                  (click)="toggleSplitMember(member.id)"
+                  style="padding: 0.4rem 0.6rem;"
+                >
+                  <div class="family-card__avatar family-card__avatar--sm" [style.background]="member.color + '22'" [style.color]="member.color">
+                    {{ member.initial }}
+                  </div>
+                  <div class="family-card__info">
+                    <span class="family-card__name" style="font-size: 0.8rem;">{{ member.name }}</span>
+                  </div>
+                  @if (splitSelectedMembers().has(member.id)) {
+                    <span class="wallet-chip__check">✓</span>
+                  }
+                </button>
+              }
+            </div>
+
+            <!-- Wallet Select -->
+            <div class="wallet-select" style="margin-bottom: 0.75rem;">
+              <span class="wallet-select__label">Target wallet:</span>
+              <div class="wallet-select__chips">
+                @for (acc of accountService.allAccounts(); track acc.id) {
+                  <button
+                    class="mini-wallet"
+                    [class.mini-wallet--selected]="splitTargetAccount()?.id === acc.id"
+                    (click)="splitTargetAccount.set(acc)"
+                  >
+                    {{ getWalletIcon(acc.type) }} {{ acc.name }}
+                  </button>
+                }
+              </div>
+            </div>
+
+            <!-- Amount + Note -->
+            <div class="form-row" style="margin-bottom: 0.75rem;">
+              <input
+                type="number"
+                class="form-input"
+                placeholder="Total Amount (UZS) to divide"
+                [ngModel]="splitAmount()"
+                (ngModelChange)="splitAmount.set($event)"
+              />
+            </div>
+            <input
+              type="text"
+              class="form-input"
+              placeholder="Description (e.g. Dinner)"
+              style="margin-bottom: 0.75rem;"
+              [ngModel]="splitNote()"
+              (ngModelChange)="splitNote.set($event)"
+            />
+
+            <button
+              class="action-btn action-btn--family"
+              (click)="submitSplitGather()"
+              [disabled]="!splitAmount() || splitSelectedMembers().size === 0 || !splitTargetAccount()"
+            >
+              {{ splitAction() === 'gather' ? 'Request' : 'Give' }} ({{ splitSelectedMembers().size }} members)
+            </button>
+          </div>
+        }
 
         <!-- Add Family Form -->
         @if (showAddFamily()) {
@@ -487,6 +586,27 @@ import { TransactionCategory } from '../../models/transaction.model';
     }
     .stat-pill__value { font-size: 1.15rem; font-weight: 700; color: #fff; }
 
+    /* ===== Animated Stat Cards Row ===== */
+    .stat-cards-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.875rem;
+    }
+    @media (max-width: 680px) {
+      .stat-cards-row { grid-template-columns: 1fr; }
+    }
+
+    /* ===== Cashflow grid ===== */
+    .cashflow-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.875rem;
+      align-items: start;
+    }
+    @media (max-width: 720px) {
+      .cashflow-grid { grid-template-columns: 1fr; }
+    }
+
     /* ===== Sections ===== */
     .section-title { font-size: 1rem; color: #fff; margin: 0; font-weight: 600; }
     .section-hint {
@@ -495,6 +615,7 @@ import { TransactionCategory } from '../../models/transaction.model';
       margin: 0.15rem 0 0.75rem;
     }
     .section { display: flex; flex-direction: column; }
+    .section--3d { margin-bottom: 0.25rem; }
 
     /* ===== Wallet Chips ===== */
     .wallets-grid {
@@ -1099,9 +1220,33 @@ export class DashboardComponent {
   readonly familyFeedback = signal('');
   readonly familyFeedbackType = signal<'success' | 'error'>('success');
 
+  // Split & Gather fields
+  readonly showSplitGather = signal(false);
+  readonly splitAction = signal<'split' | 'gather'>('gather');
+  readonly splitAmount = signal<number | null>(null);
+  readonly splitNote = signal('');
+  readonly splitTargetAccount = signal<Account | null>(null);
+  readonly splitSelectedMembers = signal<Set<string>>(new Set());
+
   readonly categories: TransactionCategory[] = [
     'Food', 'Taxi', 'Salary', 'Utilities', 'Shopping', 'Transfer', 'Freelance', 'Rent', 'Other',
   ];
+
+  /** Cashflow data grouped by category for the animated bar chart */
+  readonly cashflowBars = computed<CashflowBar[]>(() => {
+    const txs = this.transactionService.recentTransactions();
+    const map = new Map<string, { income: number; expense: number }>();
+    for (const t of txs) {
+      const entry = map.get(t.category) ?? { income: 0, expense: 0 };
+      if (t.type === 'income') entry.income += t.amountUZS;
+      else entry.expense += t.amountUZS;
+      map.set(t.category, entry);
+    }
+    return Array.from(map.entries())
+      .map(([label, v]) => ({ label, income: v.income, expense: v.expense }))
+      .sort((a, b) => (b.income + b.expense) - (a.income + a.expense))
+      .slice(0, 6);
+  });
 
   constructor(
     public readonly accountService: AccountService,
@@ -1140,14 +1285,51 @@ export class DashboardComponent {
     this.resetForm();
   }
 
+  // Security Rate Limiter Simulator
+  private submitAttempts = 0;
+  private lastAttemptTime = 0;
+
   submitAction(): void {
+    const now = Date.now();
+    
+    // Rate Limiting: max 5 requests per 10 seconds
+    if (now - this.lastAttemptTime > 10000) {
+      this.submitAttempts = 0;
+    }
+    
+    if (this.submitAttempts >= 5) {
+      this.showFeedback('Too many requests. Please wait a moment.', 'error');
+      return;
+    }
+
+    this.submitAttempts++;
+    this.lastAttemptTime = now;
+
     const acc = this.selectedAccount();
     const amt = this.amount();
-    if (!acc || !amt || amt <= 0) return;
+    
+    // Strict Input Validation
+    if (!acc) return;
+    if (amt === null || isNaN(amt) || amt <= 0) {
+      this.showFeedback('Invalid amount. Must be greater than 0.', 'error');
+      return;
+    }
+    
+    // Max transaction limit (e.g. 500M UZS)
+    if (amt > 500_000_000) {
+      this.showFeedback('Amount exceeds transaction limit.', 'error');
+      return;
+    }
+
+    // Sanitize Description to prevent XSS
+    const sanitizedDesc = (this.description() || '')
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .trim();
 
     if (this.actionMode() === 'income') {
       this.incomeService.addIncome(
-        this.description() || 'Income',
+        sanitizedDesc || 'Income',
         amt,
         acc.type === 'cash' ? 'cash' : 'card',
         acc.id,
@@ -1160,7 +1342,7 @@ export class DashboardComponent {
         this.category(),
         amt,
         acc.id,
-        this.description() || undefined,
+        sanitizedDesc || undefined,
       );
       if (success) {
         this.showFeedback(`−${this.currencyService.formatUZS(amt)} from ${acc.name}`, 'success');
@@ -1284,6 +1466,56 @@ export class DashboardComponent {
     this.familyNote.set('');
     this.familyTargetAccount.set(null);
     this.familyFeedback.set('');
+  }
+
+  // --- Split & Gather Logic ---
+  toggleSplitMember(id: string): void {
+    const current = new Set(this.splitSelectedMembers());
+    if (current.has(id)) {
+      current.delete(id);
+    } else {
+      current.add(id);
+    }
+    this.splitSelectedMembers.set(current);
+  }
+
+  submitSplitGather(): void {
+    const members = Array.from(this.splitSelectedMembers());
+    const amount = this.splitAmount();
+    const acc = this.splitTargetAccount();
+    if (!amount || amount <= 0 || members.length === 0 || !acc) {
+      this.showFamilyFeedback('Please fill all fields and select valid members.', 'error');
+      return;
+    }
+
+    const perPerson = Math.round(amount / members.length);
+    const mode = this.splitAction();
+    const sanitizedDesc = (this.splitNote() || '').replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+    let successCount = 0;
+
+    for (const mId of members) {
+      const note = `${mode === 'gather' ? 'Gather' : 'Split'}: ${sanitizedDesc}`;
+      if (mode === 'gather') {
+        const ok = this.familyService.receiveMoney(mId, perPerson, acc.id, note);
+        if (ok) successCount++;
+      } else {
+        const ok = this.familyService.giveMoney(mId, perPerson, acc.id, note);
+        if (ok) successCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      this.showFamilyFeedback(
+        `Successfully ${mode === 'gather' ? 'gathered' : 'split'} ${this.currencyService.formatUZS(amount)} among ${successCount} members`,
+        'success'
+      );
+      this.showSplitGather.set(false);
+      this.splitAmount.set(null);
+      this.splitNote.set('');
+      this.splitSelectedMembers.set(new Set());
+    } else {
+      this.showFamilyFeedback('Action failed. Check member permissions.', 'error');
+    }
   }
 
   private showFamilyFeedback(msg: string, type: 'success' | 'error'): void {

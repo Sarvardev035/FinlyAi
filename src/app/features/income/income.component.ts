@@ -1,7 +1,7 @@
 import { Component, ChangeDetectionStrategy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { GlassCardComponent, UzsFormatPipe } from '../../shared';
+import { UzsFormatPipe } from '../../shared';
 import { IncomeService, AccountService, CurrencyService } from '../../core/services';
 import { IncomeFormat } from '../../models';
 
@@ -15,7 +15,7 @@ interface IncomeResource {
 @Component({
   selector: 'app-income',
   standalone: true,
-  imports: [CommonModule, FormsModule, GlassCardComponent, UzsFormatPipe],
+  imports: [CommonModule, FormsModule, UzsFormatPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="income">

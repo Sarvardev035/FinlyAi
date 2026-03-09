@@ -9,8 +9,5 @@ export const authGuard: CanActivateFn = () => {
     return true;
   }
 
-  // For now allow all routes since there's no backend auth
-  // When a backend is added, redirect to login:
-  // return router.createUrlTree(['/login']);
-  return true;
+  return router.createUrlTree(['/login']);
 };

@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GlassCardComponent, UzsFormatPipe } from '../../shared';
@@ -15,6 +15,36 @@ import { DebtType } from '../../models';
       <div class="debts__header">
         <h2 class="section-title">📋 Debt Ledger</h2>
         <button class="btn btn--accent" (click)="showModal.set(true)">+ Add Debt</button>
+      </div>
+
+      <!-- Debt Summary Arc -->
+      <div class="debt-arc-row">
+        <div class="debt-arc">
+          <svg viewBox="0 0 120 70" class="arc-svg">
+            <!-- track -->
+            <path d="M10 65 A55 55 0 0 1 110 65" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10" stroke-linecap="round"/>
+            <!-- owed arc (red) -->
+            <path class="arc-owed"
+              d="M10 65 A55 55 0 0 1 110 65"
+              fill="none" stroke="#ff6b6b" stroke-width="10" stroke-linecap="round"
+              [style.stroke-dasharray]="owedDash()"
+              [style.stroke-dashoffset]="owedOffset()"
+            />
+            <!-- collect arc (green) overlaid -->
+            <path class="arc-collect"
+              d="M10 65 A55 55 0 0 1 110 65"
+              fill="none" stroke="#00d68f" stroke-width="10" stroke-linecap="round"
+              [style.stroke-dasharray]="collectDash()"
+              [style.stroke-dashoffset]="collectOffset()"
+            />
+          </svg>
+          <div class="arc-center">
+            <span class="arc-net" [class.arc-net--positive]="debtService.totalCollect() >= debtService.totalOwed()">
+              {{ debtService.totalCollect() - debtService.totalOwed() >= 0 ? '+' : '−' }}{{ (debtService.totalCollect() - debtService.totalOwed()) | number:'1.0-0' }}
+            </span>
+            <span class="arc-net-label">net balance</span>
+          </div>
+        </div>
       </div>
 
       <!-- Tabs -->
@@ -135,6 +165,47 @@ import { DebtType } from '../../models';
   `,
   styles: [`
     .debts { display: flex; flex-direction: column; gap: 1.25rem; }
+    /* ===== Arc visualisation ===== */
+    .debt-arc-row {
+      display: flex;
+      justify-content: center;
+      padding: 0.5rem 0;
+    }
+    .debt-arc {
+      position: relative;
+      width: 180px;
+    }
+    .arc-svg { width: 100%; display: block; }
+    .arc-owed, .arc-collect {
+      transition: stroke-dasharray 0.8s cubic-bezier(0.34,1.56,0.64,1),
+                  stroke-dashoffset 0.8s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .arc-center {
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .arc-net {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #ff6b6b;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+    .arc-net--positive { color: #00d68f; }
+    .arc-net-label {
+      font-size: 0.58rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.3);
+      font-weight: 700;
+    }
+    /* ===== Rest ===== */
     .debts__header {
       display: flex;
       align-items: center;
@@ -277,8 +348,22 @@ import { DebtType } from '../../models';
   `],
 })
 export class DebtsComponent {
-  activeTab = signal<DebtType>('owed');
-  showModal = signal(false);
+  readonly activeTab = signal<DebtType>('owed');
+  readonly showModal = signal(false);
+  readonly debtLimit = signal(15_000_000);
+
+  private readonly ARC = 173; // ≈ π * radius(55) for the half-circle SVG path
+
+  private readonly owedLen = computed(() =>
+    Math.min(this.ARC, (this.debtService.totalOwed() / Math.max(1, this.debtLimit())) * this.ARC));
+
+  private readonly collectLen = computed(() =>
+    Math.min(this.ARC, (this.debtService.totalCollect() / Math.max(1, this.debtLimit())) * this.ARC));
+
+  readonly owedDash    = computed(() => `${this.owedLen()} 1000`);
+  readonly owedOffset  = computed(() => 0);
+  readonly collectDash = computed(() => `${this.collectLen()} 1000`);
+  readonly collectOffset = computed(() => -(this.ARC - this.collectLen()));
 
   newDebtType: DebtType = 'owed';
   newPersonName = '';

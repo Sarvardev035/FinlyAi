@@ -5,14 +5,14 @@
 
 /* ---------- Design Tokens ---------- */
 :root {
-  --bg: #0a0e1a;
-  --surface: rgba(255, 255, 255, 0.04);
-  --accent: #6c5ce7;
-  --success: #00d68f;
-  --warning: #ffa94d;
-  --danger: #ff6b6b;
-  --radius: 1.25rem;
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bg: #0F172A; /* Deep Navy Apple-style */
+  --surface: rgba(255, 255, 255, 0.05); /* Lighter surface for glass effect */
+  --accent: #6366F1; /* Indigo slightly softened */
+  --success: #10B981; /* Apple-style green */
+  --warning: #F59E0B; /* Apple-style amber */
+  --danger: #EF4444; /* Apple-style red */
+  --radius: 1.5rem; /* Larger modern border radius */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
 }
 
 /* ---------- Reset ---------- */

@@ -6,3 +6,5 @@ export { BudgetService } from './budget.service';
 export { TransactionService } from './transaction.service';
 export { FamilyService } from './family.service';
 export { GoalsService } from './goals.service';
+export { AuthService } from './auth.service';
+export type { User, RegisterPayload, LoginPayload, PasswordStrength } from './auth.service';
