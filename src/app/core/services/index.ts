@@ -1,3 +1,4 @@
+export { AuthService } from './auth.service';
 export { CurrencyService } from './currency.service';
 export { AccountService } from './account.service';
 export { DebtService } from './debt.service';
