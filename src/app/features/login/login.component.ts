@@ -30,23 +30,23 @@ export class LoginComponent {
     this.error.set(null);
   }
 
-  submit(): void {
+  async submit(): Promise<void> {
     if (this.form.invalid) return;
     this.loading.set(true);
     this.error.set(null);
 
     const { email, password } = this.form.getRawValue();
 
-    const request$ = this.isRegister()
-      ? this.auth.register({ fullName: this.fullName.value ?? '', email, password })
-      : this.auth.login({ email, password });
-
-    request$.subscribe({
-      next: () => this.router.navigate(['/dashboard']),
-      error: (err) => {
-        this.error.set(err?.error?.message ?? 'Login failed. Check your credentials.');
-        this.loading.set(false);
-      },
-    });
+    try {
+      if (this.isRegister()) {
+        await this.auth.register({ fullName: this.fullName.value ?? '', email, password });
+      } else {
+        await this.auth.login({ email, password });
+      }
+      this.router.navigate(['/dashboard']);
+    } catch (err: any) {
+      this.error.set(err?.error?.message ?? 'Login failed. Check your credentials.');
+      this.loading.set(false);
+    }
   }
 }

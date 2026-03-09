@@ -1,38 +1,24 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
 import { Account, AccountSummary } from '../../models';
 import { CurrencyService } from './currency.service';
+import { ApiService } from './api.service';
+
+interface BackendAccount {
+  id: string;
+  name: string;
+  type: string;
+  currency: string;
+  balance: number;
+  createdAt: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class AccountService {
-  private readonly accounts = signal<Account[]>([
-    {
-      id: 'humo_001',
-      name: 'Humo',
-      type: 'humo',
-      balanceUZS: 4200000,
-      currency: 'UZS',
-      isActive: true,
-      createdAt: new Date('2025-01-15'),
-    },
-    {
-      id: 'uzcard_001',
-      name: 'Uzcard',
-      type: 'uzcard',
-      balanceUZS: 2380000,
-      currency: 'UZS',
-      isActive: true,
-      createdAt: new Date('2025-02-10'),
-    },
-    {
-      id: 'cash_001',
-      name: 'Cash',
-      type: 'cash',
-      balanceUZS: 760000,
-      currency: 'UZS',
-      isActive: true,
-      createdAt: new Date('2025-01-01'),
-    },
-  ]);
+  private readonly currency = inject(CurrencyService);
+  private readonly api = inject(ApiService);
+
+  private readonly accounts = signal<Account[]>([]);
+  private _loaded = false;
 
   readonly allAccounts = this.accounts.asReadonly();
 
@@ -46,24 +32,38 @@ export class AccountService {
     };
   });
 
-  constructor(private readonly currency: CurrencyService) {}
+  loadAccounts(): void {
+    this.api.getAccounts().subscribe({
+      next: (res) => {
+        const mapped: Account[] = (res.data as BackendAccount[]).map((a) => ({
+          id: a.id,
+          name: a.name,
+          type: a.type,
+          balanceUZS: Math.round(a.balance * this.currency.getExchangeRate()),
+          currency: 'UZS',
+          isActive: true,
+          createdAt: new Date(a.createdAt),
+        }));
+        this.accounts.set(mapped);
+        this._loaded = true;
+      },
+      error: () => {
+        // Keep empty on error — user may not have accounts yet
+      },
+    });
+  }
 
   getAccountById(id: string): Account | undefined {
     return this.accounts().find((acc) => acc.id === id);
   }
 
   addAccount(name: string, type: string, initialBalance: number): void {
-    const id = `${name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`;
-    const newAccount: Account = {
-      id,
+    this.api.createAccount({
       name,
-      type,
-      balanceUZS: Math.max(initialBalance, 0),
+      type: type.toUpperCase(),
       currency: 'UZS',
-      isActive: true,
-      createdAt: new Date(),
-    };
-    this.accounts.update((accs) => [...accs, newAccount]);
+      initialBalance: Math.max(initialBalance, 0),
+    }).subscribe(() => this.loadAccounts());
   }
 
   updateBalance(accountId: string, amountUZS: number): boolean {

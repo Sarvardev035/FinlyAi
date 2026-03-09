@@ -1,14 +1,26 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { Budget, BudgetProgress, FamilyMember } from '../../models';
+import { ApiService } from './api.service';
+
+interface BackendBudget {
+  id: string;
+  type: string;
+  categoryId: string;
+  categoryName: string;
+  monthlyLimit: number;
+  spentAmount: number;
+  remainingAmount: number;
+  percentageUsed: number;
+  year: number;
+  month: number;
+  createdAt: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class BudgetService {
-  private readonly budgets = signal<Budget[]>([
-    { id: 'b1', category: 'Food', usedUSD: 72, limitUSD: 200 },
-    { id: 'b2', category: 'Taxi', usedUSD: 18, limitUSD: 50 },
-    { id: 'b3', category: 'Shopping', usedUSD: 130, limitUSD: 300 },
-    { id: 'b4', category: 'Utilities', usedUSD: 40, limitUSD: 80 },
-  ]);
+  private readonly api = inject(ApiService);
+
+  private readonly budgets = signal<Budget[]>([]);
 
   private readonly family = signal<FamilyMember[]>([
     { id: 'f1', initial: 'S', name: 'Sardor', relation: 'Brother', color: '#6c5ce7', permissions: ['give', 'receive', 'debt'] },
@@ -45,14 +57,30 @@ export class BudgetService {
     this.budgets().reduce((sum, b) => sum + b.limitUSD, 0)
   );
 
+  loadBudgets(): void {
+    const now = new Date();
+    this.api.getBudgets(now.getFullYear(), now.getMonth() + 1).subscribe({
+      next: (res) => {
+        const mapped: Budget[] = (res.data as BackendBudget[]).map((b) => ({
+          id: b.id,
+          category: b.categoryName ?? b.type,
+          usedUSD: b.spentAmount ?? 0,
+          limitUSD: b.monthlyLimit ?? 1,
+        }));
+        this.budgets.set(mapped);
+      },
+      error: () => {},
+    });
+  }
+
   addBudget(category: string, limitUSD: number): void {
-    const budget: Budget = {
-      id: `b_${Date.now()}`,
-      category,
-      usedUSD: 0,
-      limitUSD: Math.max(limitUSD, 1),
-    };
-    this.budgets.update((list) => [...list, budget]);
+    const now = new Date();
+    this.api.createBudget({
+      type: 'MONTHLY',
+      monthlyLimit: Math.max(limitUSD, 1),
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
+    }).subscribe(() => this.loadBudgets());
   }
 
   addSpending(budgetId: string, amountUSD: number): void {
