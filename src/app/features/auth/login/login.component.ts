@@ -284,7 +284,14 @@ export class LoginComponent implements OnInit {
       });
       await this.router.navigate(['/dashboard']);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Sign-in failed. Please try again.';
+      // Handle both Error objects and HTTP error responses from backend
+      let msg = 'Sign-in failed. Please try again.';
+      if (err instanceof Error) {
+        msg = err.message;
+      } else if (err && typeof err === 'object' && 'error' in err) {
+        const httpErr = err as { error?: { message?: string } };
+        msg = httpErr.error?.message ?? msg;
+      }
       this.serverError.set(msg);
       this.startCooldown(5);
     } finally {

@@ -679,7 +679,13 @@ export class RegisterComponent implements OnInit {
 
       setTimeout(() => this.router.navigate(['/dashboard']), 1200);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Registration failed. Please try again.';
+      let msg = 'Registration failed. Please try again.';
+      if (err instanceof Error) {
+        msg = err.message;
+      } else if (err && typeof err === 'object' && 'error' in err) {
+        const httpErr = err as { error?: { message?: string } };
+        msg = httpErr.error?.message ?? msg;
+      }
       this.serverError.set(msg);
       this.startCooldown(8);
     } finally {

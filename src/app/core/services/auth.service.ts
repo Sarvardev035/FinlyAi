@@ -1,6 +1,8 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
+import { lastValueFrom } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 /* ─── Public Types ─────────────────────────────────────────────────────────── */
 export interface User {
@@ -29,8 +31,8 @@ export interface PasswordStrength {
   tips: string[];
 }
 
-/* Let's simulate an in-memory DB so we never put passwords in localStorage! */
-const IN_MEMORY_DB = new Map<string, { user: User; ph: string }>();
+interface AuthTokens { accessToken: string; refreshToken: string; }
+interface ApiResponse<T> { success: boolean; data: T; }
 
 /* ─── Auth Service ─────────────────────────────────────────────────────────── */
 @Injectable({ providedIn: 'root' })
@@ -38,10 +40,12 @@ export class AuthService {
   /* ── DI ── */
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
+  private readonly base = environment.apiUrl;
 
   /* ── Storage keys ── */
   private readonly TOKEN_KEY = 'fineco_jwt';
-  private readonly USER_KEY = 'fineco_user'; // Storing just the UI user profile, no secrets.
+  private readonly REFRESH_KEY = 'fineco_refresh';
+  private readonly USER_KEY = 'fineco_user';
 
   /* ── State ── */
   private readonly _currentUser = signal<User | null>(this.loadPersistedUser());
@@ -66,49 +70,26 @@ export class AuthService {
     return localStorage.getItem(this.TOKEN_KEY);
   }
 
-  private persistSession(token: string, user: User): void {
-    localStorage.setItem(this.TOKEN_KEY, token);
-    localStorage.setItem(this.USER_KEY, JSON.stringify(user));
-    this._currentUser.set(user);
+  private persistTokens(tokens: AuthTokens): void {
+    localStorage.setItem(this.TOKEN_KEY, tokens.accessToken);
+    localStorage.setItem(this.REFRESH_KEY, tokens.refreshToken);
   }
 
-  /* ─── Mock token ───────────────────────────────────────────────────────── */
-
-  private buildMockJwt(user: User): string {
-    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-    const payload = btoa(
-      JSON.stringify({ sub: user.id, email: user.email, iat: Math.floor(Date.now() / 1000) })
-    );
-    const signature = btoa(`${user.id}.${Date.now()}`); // Fake signature
-    return `${header}.${payload}.${signature}`;
+  private persistUser(user: User): void {
+    localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+    this._currentUser.set(user);
   }
 
   /* ─── Register ─────────────────────────────────────────────────────────── */
 
   async register(payload: RegisterPayload): Promise<void> {
     this._isLoading.set(true);
-
     try {
-      await delay(900);
-      const emailKey = payload.email.toLowerCase().trim();
-
-      if (IN_MEMORY_DB.has(emailKey)) {
-        throw new Error('An account with this email already exists.');
-      }
-
-      const user: User = {
-        id: crypto.randomUUID(),
-        fullName: payload.fullName.trim(),
-        email: emailKey,
-        createdAt: new Date().toISOString(),
-      };
-
-      // In-memory so it never touches disk/localStorage
-      // Very basic hash simulation. In real life backend handles this.
-      IN_MEMORY_DB.set(emailKey, { user, ph: btoa(payload.password) });
-
-      const token = this.buildMockJwt(user);
-      this.persistSession(token, user);
+      const res = await lastValueFrom(
+        this.http.post<ApiResponse<AuthTokens>>(`${this.base}/auth/register`, payload)
+      );
+      this.persistTokens(res.data);
+      await this.fetchAndPersistUser();
     } finally {
       this._isLoading.set(false);
     }
@@ -118,24 +99,28 @@ export class AuthService {
 
   async login(payload: LoginPayload): Promise<void> {
     this._isLoading.set(true);
-
     try {
-      await delay(800);
-      const emailKey = payload.email.toLowerCase().trim();
-      const account = IN_MEMORY_DB.get(emailKey);
-
-      if (!account) {
-        throw new Error('Invalid email or password.');
-      }
-
-      if (atob(account.ph) !== payload.password) {
-        throw new Error('Invalid email or password.');
-      }
-
-      const token = this.buildMockJwt(account.user);
-      this.persistSession(token, account.user);
+      const res = await lastValueFrom(
+        this.http.post<ApiResponse<AuthTokens>>(`${this.base}/auth/login`, payload)
+      );
+      this.persistTokens(res.data);
+      await this.fetchAndPersistUser();
     } finally {
       this._isLoading.set(false);
+    }
+  }
+
+  /* ─── Fetch current user profile ──────────────────────────────────────── */
+
+  private async fetchAndPersistUser(): Promise<void> {
+    try {
+      const res = await lastValueFrom(
+        this.http.get<ApiResponse<User>>(`${this.base}/users/me`)
+      );
+      this.persistUser(res.data);
+    } catch {
+      // If /users/me fails, still treat as logged in — token is stored
+      this._currentUser.set({ id: '', fullName: 'User', email: '', createdAt: '' });
     }
   }
 
@@ -143,6 +128,7 @@ export class AuthService {
 
   logout(): void {
     localStorage.removeItem(this.TOKEN_KEY);
+    localStorage.removeItem(this.REFRESH_KEY);
     localStorage.removeItem(this.USER_KEY);
     this._currentUser.set(null);
     this.router.navigate(['/login']);
@@ -187,5 +173,3 @@ export class AuthService {
     return { score: rawScore, tips, ...META[rawScore] };
   }
 }
-
-const delay = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
