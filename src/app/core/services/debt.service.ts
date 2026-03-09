@@ -1,8 +1,27 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { Debt, DebtType, DebtStatus, DebtAlert } from '../../models';
+import { ApiService } from './api.service';
+import { CurrencyService } from './currency.service';
+
+interface BackendDebt {
+  id: string;
+  personName: string;
+  type: string;
+  amount: number;
+  remainingAmount: number;
+  currency: string;
+  accountId: string;
+  description: string;
+  status: string;
+  dueDate: string;
+  createdAt: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class DebtService {
+  private readonly api = inject(ApiService);
+  private readonly currency = inject(CurrencyService);
+
   private readonly debts = signal<Debt[]>([]);
 
   readonly allDebts = this.debts.asReadonly();
@@ -34,6 +53,25 @@ export class DebtService {
     this.alerts().filter((a) => a.isUrgent || a.isOverdue)
   );
 
+  loadDebts(): void {
+    this.api.getDebts().subscribe({
+      next: (res) => {
+        const mapped: Debt[] = (res.data as BackendDebt[]).map((d) => ({
+          id: d.id,
+          type: d.type === 'DEBT' ? 'owed' : 'collect' as DebtType,
+          personName: d.personName,
+          amountUZS: Math.round((d.remainingAmount ?? d.amount) * (d.currency === 'USD' ? this.currency.getExchangeRate() : 1)),
+          status: d.status as DebtStatus,
+          dueDate: new Date(d.dueDate),
+          notes: d.description,
+          createdAt: new Date(d.createdAt),
+        }));
+        this.debts.set(mapped);
+      },
+      error: () => {},
+    });
+  }
+
   addDebt(
     personName: string,
     amountUZS: number,
@@ -41,27 +79,22 @@ export class DebtService {
     dueDate: Date,
     notes?: string
   ): void {
-    const debt: Debt = {
-      id: `debt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      type,
+    this.api.createDebt({
       personName,
-      amountUZS: Math.max(amountUZS, 0),
-      status: 'OPEN',
-      dueDate,
-      notes,
-      createdAt: new Date(),
-    };
-    this.debts.update((list) => [...list, debt]);
+      type: type === 'owed' ? 'DEBT' : 'RECEIVABLE',
+      amount: amountUZS,
+      currency: 'UZS',
+      dueDate: dueDate.toISOString().slice(0, 10),
+      description: notes,
+    }).subscribe(() => this.loadDebts());
   }
 
   closeDebt(id: string): void {
-    this.debts.update((list) =>
-      list.map((d) => (d.id === id ? { ...d, status: 'CLOSED' as DebtStatus } : d))
-    );
+    this.api.repayDebt(id, { paymentAmount: 0 }).subscribe(() => this.loadDebts());
   }
 
   removeDebt(id: string): void {
-    this.debts.update((list) => list.filter((d) => d.id !== id));
+    this.api.deleteDebt(id).subscribe(() => this.loadDebts());
   }
 
   private calculateAlert(debt: Debt): DebtAlert {

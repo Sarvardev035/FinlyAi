@@ -1,8 +1,25 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { Income, IncomeFormat } from '../../models';
+import { ApiService } from './api.service';
+import { CurrencyService } from './currency.service';
+
+interface BackendIncome {
+  id: string;
+  amount: number;
+  currency: string;
+  description: string;
+  incomeDate: string;
+  categoryId: string;
+  categoryName: string;
+  accountId: string;
+  createdAt: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class IncomeService {
+  private readonly api = inject(ApiService);
+  private readonly currency = inject(CurrencyService);
+
   private readonly incomes = signal<Income[]>([]);
 
   readonly allIncomes = this.incomes.asReadonly();
@@ -30,6 +47,25 @@ export class IncomeService {
       .slice(0, 10)
   );
 
+  loadIncomes(): void {
+    this.api.getIncomes().subscribe({
+      next: (res) => {
+        const mapped: Income[] = (res.data as BackendIncome[]).map((i) => ({
+          id: i.id,
+          source: i.categoryName ?? i.description ?? 'Income',
+          amountUZS: Math.round(i.amount * (i.currency === 'USD' ? this.currency.getExchangeRate() : 1)),
+          format: 'bank' as IncomeFormat,
+          accountId: i.accountId,
+          date: new Date(i.incomeDate),
+          notes: i.description,
+          createdAt: new Date(i.createdAt),
+        }));
+        this.incomes.set(mapped);
+      },
+      error: () => {},
+    });
+  }
+
   addIncome(
     source: string,
     amountUZS: number,
@@ -37,20 +73,18 @@ export class IncomeService {
     accountId: string,
     notes?: string
   ): void {
-    const income: Income = {
-      id: `inc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      source,
-      amountUZS: Math.max(amountUZS, 0),
-      format,
+    const today = new Date().toISOString().slice(0, 10);
+    this.api.createIncome({
+      amount: amountUZS,
+      currency: 'UZS',
+      description: notes ?? source,
+      incomeDate: today,
+      categoryId: accountId,
       accountId,
-      date: new Date(),
-      notes,
-      createdAt: new Date(),
-    };
-    this.incomes.update((list) => [...list, income]);
+    }).subscribe(() => this.loadIncomes());
   }
 
   removeIncome(id: string): void {
-    this.incomes.update((list) => list.filter((inc) => inc.id !== id));
+    this.api.deleteIncome(id).subscribe(() => this.loadIncomes());
   }
 }
