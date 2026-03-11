@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UsdFormatPipe } from '../../shared';
@@ -196,7 +196,7 @@ import { BudgetService } from '../../core/services';
     .field__input:focus { border-color: var(--accent); }
   `],
 })
-export class BudgetComponent {
+export class BudgetComponent implements OnInit {
   showBudgetModal = signal(false);
   showFamilyModal = signal(false);
 
@@ -206,6 +206,10 @@ export class BudgetComponent {
   newMemberColor = '#6c5ce7';
 
   constructor(public readonly budgetService: BudgetService) {}
+
+  ngOnInit(): void {
+    this.budgetService.loadBudgets();
+  }
 
   addBudget(): void {
     if (!this.newCategory.trim() || this.newLimit <= 0) return;

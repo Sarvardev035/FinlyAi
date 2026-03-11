@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, signal, computed } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UzsFormatPipe } from '../../shared';
@@ -1196,7 +1196,7 @@ import { TransactionCategory } from '../../models/transaction.model';
     }
   `],
 })
-export class DashboardComponent {
+export class DashboardComponent implements OnInit {
   readonly selectedAccount = signal<Account | null>(null);
   readonly actionMode = signal<'income' | 'expense'>('income');
   readonly amount = signal<number | null>(null);
@@ -1256,6 +1256,12 @@ export class DashboardComponent {
     public readonly familyService: FamilyService,
     private readonly currencyService: CurrencyService,
   ) {}
+
+  ngOnInit(): void {
+    this.accountService.loadAccounts();
+    this.incomeService.loadIncomes();
+    this.debtService.loadDebts();
+  }
 
   getGreeting(): string {
     const hour = new Date().getHours();

@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { WalletCardComponent } from '../../shared';
@@ -230,7 +230,7 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
     }
   `],
 })
-export class WalletsComponent {
+export class WalletsComponent implements OnInit {
   showAddCard = signal(false);
   newCardName = '';
   newCardType = 'humo';
@@ -252,6 +252,10 @@ export class WalletsComponent {
     public readonly transactionService: TransactionService,
     public readonly currency: CurrencyService,
   ) {}
+
+  ngOnInit(): void {
+    this.accountService.loadAccounts();
+  }
 
   addCard(): void {
     if (!this.newCardName.trim()) return;

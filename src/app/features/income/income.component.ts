@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, signal, computed } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UzsFormatPipe } from '../../shared';
@@ -452,7 +452,7 @@ interface IncomeResource {
     }
   `],
 })
-export class IncomeComponent {
+export class IncomeComponent implements OnInit {
   readonly showAddResource = signal(false);
   readonly selectedFormat = signal<IncomeResource | null>(null);
   readonly selectedAccountId = signal<string>('');
@@ -483,6 +483,11 @@ export class IncomeComponent {
     public readonly accountService: AccountService,
     public readonly currency: CurrencyService,
   ) {}
+
+  ngOnInit(): void {
+    this.incomeService.loadIncomes();
+    this.accountService.loadAccounts();
+  }
 
   getFormatAmount(format: IncomeFormat): number {
     return this.incomeService.incomeByFormat()[format];

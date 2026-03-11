@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, signal, computed } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GlassCardComponent, UzsFormatPipe } from '../../shared';
@@ -347,7 +347,7 @@ import { DebtType } from '../../models';
     .field__textarea { min-height: 60px; resize: vertical; font-family: inherit; }
   `],
 })
-export class DebtsComponent {
+export class DebtsComponent implements OnInit {
   readonly activeTab = signal<DebtType>('owed');
   readonly showModal = signal(false);
   readonly debtLimit = signal(15_000_000);
@@ -375,6 +375,10 @@ export class DebtsComponent {
     public readonly debtService: DebtService,
     public readonly currency: CurrencyService,
   ) {}
+
+  ngOnInit(): void {
+    this.debtService.loadDebts();
+  }
 
   getFilteredAlerts() {
     return this.debtService.alerts().filter(
