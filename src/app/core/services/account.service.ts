@@ -1,4 +1,6 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { lastValueFrom } from 'rxjs';
 import { Account, AccountSummary } from '../../models';
 import { CurrencyService } from './currency.service';
 import { ApiService } from './api.service';
@@ -7,9 +9,24 @@ interface BackendAccount {
   id: string;
   name: string;
   type: string;
+  cardType?: string | null;
   currency: string;
   balance: number;
   createdAt: string;
+}
+
+export interface CreateAccountInput {
+  name: string;
+  walletType: 'cash' | 'bank_card';
+  cardType?: 'HUMO' | 'UZCARD' | 'VISA' | 'MASTERCARD';
+  cardNumber?: string;
+  expiryDate?: string;
+  initialBalance: number;
+}
+
+export interface ActionResult {
+  ok: boolean;
+  message?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -38,7 +55,7 @@ export class AccountService {
         const mapped: Account[] = (res.data as BackendAccount[]).map((a) => ({
           id: a.id,
           name: a.name,
-          type: a.type,
+          type: this.mapBackendType(a.type, a.cardType),
           balanceUZS: Math.round(a.balance * this.currency.getExchangeRate()),
           currency: 'UZS',
           isActive: true,
@@ -57,13 +74,25 @@ export class AccountService {
     return this.accounts().find((acc) => acc.id === id);
   }
 
-  addAccount(name: string, type: string, initialBalance: number): void {
-    this.api.createAccount({
-      name,
-      type: type.toUpperCase(),
+  async addAccount(input: CreateAccountInput): Promise<ActionResult> {
+    const payload = {
+      name: input.name.trim(),
+      type: input.walletType === 'cash' ? 'CASH' : 'BANK_CARD',
       currency: 'UZS',
-      initialBalance: Math.max(initialBalance, 0),
-    }).subscribe(() => this.loadAccounts());
+      initialBalance: Math.max(input.initialBalance, 0),
+      cardType: input.walletType === 'bank_card' ? (input.cardType ?? null) : null,
+      cardNumber: input.walletType === 'bank_card' ? (input.cardNumber ?? null) : null,
+      expiryDate: input.walletType === 'bank_card' ? (input.expiryDate ?? null) : null,
+    };
+
+    try {
+      await lastValueFrom(this.api.createAccount(payload));
+      this.loadAccounts();
+      return { ok: true };
+    } catch (err) {
+      const message = this.extractErrorMessage(err);
+      return { ok: false, message };
+    }
   }
 
   updateBalance(accountId: string, amountUZS: number): boolean {
@@ -86,5 +115,26 @@ export class AccountService {
       )
     );
     return true;
+  }
+
+  private mapBackendType(type: string, cardType?: string | null): string {
+    if (type === 'BANK_CARD') {
+      return (cardType ?? 'VISA').toLowerCase();
+    }
+    if (type === 'CASH') {
+      return 'cash';
+    }
+    return type.toLowerCase();
+  }
+
+  private extractErrorMessage(err: unknown): string {
+    const fallback = 'Failed to create wallet. Check fields and try again.';
+    if (!(err instanceof HttpErrorResponse)) return fallback;
+
+    const body = err.error;
+    if (typeof body === 'string' && body.trim()) return body;
+    if (body?.message) return String(body.message);
+    if (body?.error) return String(body.error);
+    return fallback;
   }
 }

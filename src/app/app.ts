@@ -4,11 +4,12 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { AuthService } from './core/services/auth.service';
+import { ToastOutletComponent } from './shared/components/toast-outlet/toast-outlet.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, ToastOutletComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!isAuthRoute()) {
@@ -79,6 +80,7 @@ import { AuthService } from './core/services/auth.service';
     <main [class.main-content]="!isAuthRoute()">
       <router-outlet />
     </main>
+    <app-toast-outlet />
   `,
   styleUrl: './app.scss',
 })

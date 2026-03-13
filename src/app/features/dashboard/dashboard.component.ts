@@ -13,7 +13,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { animate, stagger, spring } from 'animejs';
+import { animate, splitText, stagger, spring } from 'animejs';
 import { UzsFormatPipe } from '../../shared';
 import { AnimStatCardComponent } from '../../shared/components/anim-stat-card/anim-stat-card.component';
 import { AnimTransactionListComponent } from '../../shared/components/anim-transaction-list/anim-transaction-list.component';
@@ -33,7 +33,8 @@ import { TransactionCategory } from '../../models/transaction.model';
       <app-currency-scene class="dashboard__scene" [density]="64" />
 
       <!-- Hero -->
-      <div class="hero anim-fade-down">
+      <div class="hero">
+        <div class="hero__glow" aria-hidden="true"></div>
         <h1 class="hero__title">Good {{ getGreeting() }}, Sardor 👋</h1>
         <p class="hero__subtitle">Here's your financial overview</p>
       </div>
@@ -58,7 +59,7 @@ import { TransactionCategory } from '../../models/transaction.model';
       </div>
 
       <!-- Wallets -->
-      <div class="section anim-fade-up anim-d4">
+      <div class="section">
         <h3 class="section-title">My Wallets</h3>
         <p class="section-hint">Tap a wallet to send income or expense to it</p>
         <div class="wallets-grid">
@@ -161,7 +162,7 @@ import { TransactionCategory } from '../../models/transaction.model';
 
       <!-- Debt Alerts -->
       @if (debtService.urgentAlerts().length > 0) {
-        <div class="section anim-fade-up anim-d5">
+        <div class="section">
           <h3 class="section-title">⚠️ Debt Alerts</h3>
           <div class="alerts__list">
             @for (alert of debtService.urgentAlerts(); track alert.debt.id) {
@@ -182,7 +183,7 @@ import { TransactionCategory } from '../../models/transaction.model';
       }
 
       <!-- Family Section -->
-      <div class="section anim-fade-up anim-d6">
+      <div class="section">
         <div class="section-header">
           <div>
             <h3 class="section-title">👨‍👩‍👧‍👦 Family</h3>
@@ -593,8 +594,47 @@ import { TransactionCategory } from '../../models/transaction.model';
     }
 
     .hero { padding: 0.75rem 0 0; }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-radius: 1.2rem;
+      padding: 1rem 1rem 0.7rem;
+    }
+    .hero__glow {
+      position: absolute;
+      inset: -35% -20% auto auto;
+      width: min(46vw, 430px);
+      height: min(46vw, 430px);
+      border-radius: 50%;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 32% 32%, rgba(0,214,143,0.3), transparent 52%),
+        radial-gradient(circle at 70% 58%, rgba(108,92,231,0.32), transparent 58%),
+        radial-gradient(circle at 45% 75%, rgba(9,132,227,0.24), transparent 60%);
+      filter: blur(24px) saturate(1.1);
+      opacity: 0.75;
+      animation: heroGlowFloat 8s ease-in-out infinite;
+      z-index: 0;
+    }
     .hero__title { font-size: 1.6rem; font-weight: 700; color: #fff; margin: 0; }
     .hero__subtitle { color: rgba(255,255,255,0.45); margin: 0.15rem 0 0; font-size: 0.9rem; }
+    .hero__title,
+    .hero__subtitle {
+      position: relative;
+      z-index: 1;
+    }
+    .hero__title .word,
+    .hero__subtitle .char {
+      display: inline-block;
+      transform-origin: 50% 100%;
+      will-change: transform, opacity;
+      backface-visibility: hidden;
+    }
+
+    @keyframes heroGlowFloat {
+      0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.72; }
+      50% { transform: translate3d(-18px, 16px, 0) scale(1.05); opacity: 0.92; }
+    }
 
     /* ===== Stats Row ===== */
     .stats-row {
@@ -1244,6 +1284,11 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly zone = inject(NgZone);
 
   private introAnim?: ReturnType<typeof animate>;
+  private heroTitleAnim?: ReturnType<typeof animate>;
+  private heroSubtitleAnim?: ReturnType<typeof animate>;
+  private sectionRevealObserver?: IntersectionObserver;
+  private sectionRevealAnims: Array<ReturnType<typeof animate>> = [];
+  private splitRevertFns: Array<() => void> = [];
 
   readonly selectedAccount = signal<Account | null>(null);
   readonly actionMode = signal<'income' | 'expense'>('income');
@@ -1323,14 +1368,24 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.introAnim?.cancel();
+    this.heroTitleAnim?.cancel();
+    this.heroSubtitleAnim?.cancel();
+    this.sectionRevealObserver?.disconnect();
+    for (const anim of this.sectionRevealAnims) anim.cancel();
+    this.sectionRevealAnims = [];
+    this.clearSplitText();
   }
 
   private playIntroMotion(): void {
     const root = this.rootRef()?.nativeElement;
     if (!root) return;
 
+    this.clearSplitText();
+    this.playHeroSplitMotion(root);
+    this.setupSectionReveal(root);
+
     const targets = root.querySelectorAll<HTMLElement>(
-      '.hero, .stat-cards-row > app-anim-stat-card, .cashflow-grid, .section',
+      '.stat-cards-row > app-anim-stat-card',
     );
 
     if (!targets.length) return;
@@ -1339,10 +1394,109 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.introAnim = animate(targets, {
       opacity: [0, 1],
       translateY: [18, 0],
-      delay: stagger(75, { start: 40 }),
+      delay: stagger(75, { start: 220 }),
       ease: spring({ stiffness: 92, damping: 16 }),
       duration: 850,
     });
+  }
+
+  private playHeroSplitMotion(root: HTMLElement): void {
+    const titleEl = root.querySelector<HTMLElement>('.hero__title');
+    const subtitleEl = root.querySelector<HTMLElement>('.hero__subtitle');
+
+    try {
+      if (titleEl) {
+        const titleSplit = splitText(titleEl, { words: true, chars: true }) as unknown as {
+          words?: HTMLElement[];
+          chars?: HTMLElement[];
+          revert?: () => void;
+        };
+        if (titleSplit.revert) this.splitRevertFns.push(() => titleSplit.revert?.());
+
+        const titleWords = titleSplit.words ?? [];
+        if (titleWords.length) {
+          this.heroTitleAnim?.cancel();
+          this.heroTitleAnim = animate(titleWords, {
+            opacity: [0, 1],
+            translateY: [24, 0],
+            rotateX: [22, 0],
+            delay: stagger(55),
+            duration: 900,
+            ease: spring({ stiffness: 95, damping: 15 }),
+          });
+        }
+      }
+
+      if (subtitleEl) {
+        const subtitleSplit = splitText(subtitleEl, { chars: true }) as unknown as {
+          chars?: HTMLElement[];
+          revert?: () => void;
+        };
+        if (subtitleSplit.revert) this.splitRevertFns.push(() => subtitleSplit.revert?.());
+
+        const subtitleChars = subtitleSplit.chars ?? [];
+        if (subtitleChars.length) {
+          this.heroSubtitleAnim?.cancel();
+          this.heroSubtitleAnim = animate(subtitleChars, {
+            opacity: [0, 1],
+            translateY: [10, 0],
+            delay: stagger(18, { start: 120 }),
+            duration: 650,
+            ease: spring({ stiffness: 110, damping: 18 }),
+          });
+        }
+      }
+    } catch {
+      // Fallback if splitText cannot initialize for any reason.
+      const hero = root.querySelector<HTMLElement>('.hero');
+      if (!hero) return;
+      this.heroTitleAnim?.cancel();
+      this.heroTitleAnim = animate(hero, {
+        opacity: [0, 1],
+        translateY: [18, 0],
+        duration: 700,
+        ease: spring({ stiffness: 100, damping: 16 }),
+      });
+    }
+  }
+
+  private clearSplitText(): void {
+    for (const revert of this.splitRevertFns) revert();
+    this.splitRevertFns = [];
+  }
+
+  private setupSectionReveal(root: HTMLElement): void {
+    this.sectionRevealObserver?.disconnect();
+    for (const anim of this.sectionRevealAnims) anim.cancel();
+    this.sectionRevealAnims = [];
+
+    const revealTargets = root.querySelectorAll<HTMLElement>('.cashflow-grid, .section');
+    if (!revealTargets.length) return;
+
+    this.sectionRevealObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const el = entry.target as HTMLElement;
+
+          const anim = animate(el, {
+            opacity: [0, 1],
+            translateY: [22, 0],
+            duration: 720,
+            ease: spring({ stiffness: 105, damping: 17 }),
+          });
+          this.sectionRevealAnims.push(anim);
+          this.sectionRevealObserver?.unobserve(el);
+        }
+      },
+      { threshold: 0.18, rootMargin: '0px 0px -8% 0px' },
+    );
+
+    for (const el of revealTargets) {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(22px)';
+      this.sectionRevealObserver.observe(el);
+    }
   }
 
   getGreeting(): string {

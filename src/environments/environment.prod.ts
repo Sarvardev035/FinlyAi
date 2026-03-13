@@ -1,4 +1,5 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://finlybackend-production.up.railway.app/api',
+  apiUrl: 'https://finly.uyqidir.uy/api',
+  enforceHttps: true,
 };

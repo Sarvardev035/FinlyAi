@@ -31,30 +31,49 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
         <div class="modal-overlay" (click)="showAddCard.set(false)">
           <div class="modal" (click)="$event.stopPropagation()">
             <div class="modal__header">
-              <h3>Add New Card</h3>
+              <h3>Add New Wallet</h3>
               <button class="modal__close" (click)="showAddCard.set(false)">✕</button>
             </div>
             <div class="modal__body">
               <label class="field">
-                <span class="field__label">Card Name</span>
-                <input class="field__input" [(ngModel)]="newCardName" placeholder="e.g. Savings" />
+                <span class="field__label">Wallet Name</span>
+                <input class="field__input" [(ngModel)]="newCardName" placeholder="e.g. Salary Card" />
               </label>
               <label class="field">
-                <span class="field__label">Card Type</span>
+                <span class="field__label">Wallet Type</span>
                 <select class="field__input" [(ngModel)]="newCardType">
-                  <option value="humo">Humo</option>
-                  <option value="uzcard">Uzcard</option>
-                  <option value="visa">Visa</option>
-                  <option value="mastercard">Mastercard</option>
-                  <option value="cash">Cash</option>
-                  <option value="crypto">Crypto</option>
+                  <option value="humo">Bank Card - HUMO</option>
+                  <option value="uzcard">Bank Card - UZCARD</option>
+                  <option value="visa">Bank Card - VISA</option>
+                  <option value="mastercard">Bank Card - MASTERCARD</option>
+                  <option value="cash">Cash Wallet</option>
                 </select>
               </label>
+              @if (isBankCard()) {
+                <label class="field">
+                  <span class="field__label">Card Number</span>
+                  <input
+                    class="field__input"
+                    [(ngModel)]="newCardNumber"
+                    placeholder="8600 1234 5678 9012"
+                    maxlength="23"
+                  />
+                </label>
+                <label class="field">
+                  <span class="field__label">Expiry (optional)</span>
+                  <input class="field__input" [(ngModel)]="newCardExpiry" placeholder="MM/YY" maxlength="5" />
+                </label>
+              }
               <label class="field">
                 <span class="field__label">Initial Balance (UZS)</span>
                 <input class="field__input" type="number" [(ngModel)]="newCardBalance" placeholder="0" />
               </label>
-              <button class="btn btn--accent btn--full" (click)="addCard()">Add Card</button>
+              @if (addCardError()) {
+                <div class="form-error">{{ addCardError() }}</div>
+              }
+              <button class="btn btn--accent btn--full" [disabled]="addCardBusy()" (click)="addCard()">
+                {{ addCardBusy() ? 'Saving...' : 'Add Wallet' }}
+              </button>
             </div>
           </div>
         </div>
@@ -132,6 +151,10 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
     .btn--success { background: var(--success); color: #fff; }
     .btn--danger { background: var(--danger); color: #fff; }
     .btn--full { width: 100%; margin-top: 0.75rem; }
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
     .modal-overlay {
       position: fixed;
       inset: 0;
@@ -184,6 +207,18 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
       transition: border-color 0.2s;
     }
     .field__input:focus { border-color: var(--accent); }
+    .field__input option {
+      background: #151a34;
+      color: #eef1ff;
+    }
+    .form-error {
+      background: rgba(255, 107, 107, 0.12);
+      border: 1px solid rgba(255, 107, 107, 0.3);
+      color: #ffb0b0;
+      padding: 0.55rem 0.7rem;
+      border-radius: 0.6rem;
+      font-size: 0.82rem;
+    }
     .amount-display {
       text-align: center;
       font-size: 2rem;
@@ -232,8 +267,12 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
 })
 export class WalletsComponent implements OnInit {
   showAddCard = signal(false);
+  addCardBusy = signal(false);
+  addCardError = signal('');
   newCardName = '';
-  newCardType = 'humo';
+  newCardType: 'cash' | 'humo' | 'uzcard' | 'visa' | 'mastercard' = 'humo';
+  newCardNumber = '';
+  newCardExpiry = '';
   newCardBalance = 0;
 
   // Transaction modal state
@@ -257,11 +296,50 @@ export class WalletsComponent implements OnInit {
     this.accountService.loadAccounts();
   }
 
-  addCard(): void {
-    if (!this.newCardName.trim()) return;
-    this.accountService.addAccount(this.newCardName, this.newCardType, this.newCardBalance);
+  isBankCard(): boolean {
+    return this.newCardType !== 'cash';
+  }
+
+  async addCard(): Promise<void> {
+    this.addCardError.set('');
+
+    const name = this.newCardName.trim();
+    if (!name) {
+      this.addCardError.set('Wallet name is required.');
+      return;
+    }
+
+    const cardNumberDigits = this.newCardNumber.replace(/\D/g, '');
+    if (this.isBankCard() && cardNumberDigits.length < 16) {
+      this.addCardError.set('Card number must be at least 16 digits.');
+      return;
+    }
+
+    if (this.newCardExpiry && !/^(0[1-9]|1[0-2])\/(\d{2})$/.test(this.newCardExpiry)) {
+      this.addCardError.set('Expiry must be in MM/YY format.');
+      return;
+    }
+
+    this.addCardBusy.set(true);
+    const result = await this.accountService.addAccount({
+      name,
+      walletType: this.isBankCard() ? 'bank_card' : 'cash',
+      cardType: this.isBankCard() ? this.newCardType.toUpperCase() as 'HUMO' | 'UZCARD' | 'VISA' | 'MASTERCARD' : undefined,
+      cardNumber: this.isBankCard() ? cardNumberDigits : undefined,
+      expiryDate: this.newCardExpiry || undefined,
+      initialBalance: this.newCardBalance,
+    });
+    this.addCardBusy.set(false);
+
+    if (!result.ok) {
+      this.addCardError.set(result.message ?? 'Failed to create wallet.');
+      return;
+    }
+
     this.newCardName = '';
     this.newCardType = 'humo';
+    this.newCardNumber = '';
+    this.newCardExpiry = '';
     this.newCardBalance = 0;
     this.showAddCard.set(false);
   }
