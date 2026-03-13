@@ -254,10 +254,13 @@ export class AnimTransactionListComponent implements AfterViewInit, OnDestroy {
   readonly transactions = input<Transaction[]>([]);
   readonly maxItems     = input<number>(30);
 
-  private readonly listRef = viewChild.required<ElementRef<HTMLDivElement>>('listEl');
+  private readonly listRef = viewChild<ElementRef<HTMLDivElement>>('listEl');
   private readonly zone    = inject(NgZone);
 
-  private observer!: IntersectionObserver;
+  private observer?: IntersectionObserver;
+  private viewReady = false;
+  private rafId = 0;
+  private listAnim?: ReturnType<typeof animate>;
 
   /* Computed flow totals */
   totalIn  = () => this.transactions().filter(t => t.type === 'income' ).reduce((s,t) => s + t.amountUZS, 0);
@@ -270,39 +273,54 @@ export class AnimTransactionListComponent implements AfterViewInit, OnDestroy {
   constructor() {
     effect(() => {
       this.transactions();  // track
-      // Re-run animation when list content changes
-      setTimeout(() => this.animateItems(), 50);
+      this.scheduleAnimateItems();
     });
   }
 
   ngAfterViewInit(): void {
+    this.viewReady = true;
+    this.scheduleAnimateItems();
+
     this.zone.runOutsideAngular(() => {
       this.observer = new IntersectionObserver(
         (entries) => {
           if (entries[0]?.isIntersecting) {
             this.animateItems();
-            this.observer.disconnect();
+            this.observer?.disconnect();
           }
         },
         { threshold: 0.05 },
       );
-      this.observer.observe(this.listRef().nativeElement);
+      const list = this.listRef()?.nativeElement;
+      if (list) {
+        this.observer.observe(list);
+      }
     });
   }
 
   ngOnDestroy(): void {
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.listAnim?.cancel();
     this.observer?.disconnect();
   }
 
   private animateItems(): void {
-    const items = this.listRef().nativeElement.querySelectorAll<HTMLElement>('.tx-item');
+    if (!this.viewReady) return;
+
+    const list = this.listRef()?.nativeElement;
+    if (!list) return;
+
+    const items = list.querySelectorAll<HTMLElement>('.tx-item');
     if (!items.length) return;
 
-    animate(items, {
-      opacity:    [0, 1],
-      translateY: [12, 0],
-      delay: stagger(45, { start: 0 }),
-      ease: spring({ stiffness: 120, damping: 18 }),
+    this.listAnim?.cancel();
+    this.zone.runOutsideAngular(() => {
+      this.listAnim = animate(items, {
+        opacity:    [0, 1],
+        translateY: [12, 0],
+        delay: stagger(45, { start: 0 }),
+        ease: spring({ stiffness: 120, damping: 18 }),
+      });
     });
   }
 
@@ -314,6 +332,15 @@ export class AnimTransactionListComponent implements AfterViewInit, OnDestroy {
         duration: 180,
         ease: spring({ stiffness: 260, damping: 22 }),
       });
+    });
+  }
+
+  private scheduleAnimateItems(): void {
+    if (!this.viewReady) return;
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = requestAnimationFrame(() => {
+      this.rafId = 0;
+      this.animateItems();
     });
   }
 }

@@ -6,12 +6,13 @@ import {
   signal,
   ElementRef,
   viewChild,
+  AfterViewInit,
   OnDestroy,
   NgZone,
   inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { animate, spring, createTimeline } from 'animejs';
+import { animate, spring } from 'animejs';
 
 type CardVariant = 'networth' | 'income' | 'expense' | 'accent';
 
@@ -224,7 +225,7 @@ const VARIANTS: Record<CardVariant, VariantConfig> = {
     }
   `],
 })
-export class AnimStatCardComponent implements OnDestroy {
+export class AnimStatCardComponent implements AfterViewInit, OnDestroy {
   /* ── Inputs ── */
   readonly value   = input<number>(0);
   readonly label   = input<string>('');
@@ -234,14 +235,16 @@ export class AnimStatCardComponent implements OnDestroy {
   readonly variantConfig = () => VARIANTS[this.variant()];
 
   /* ── DOM refs ── */
-  private readonly cardRef  = viewChild.required<ElementRef<HTMLDivElement>>('card');
-  private readonly valueRef = viewChild.required<ElementRef<HTMLSpanElement>>('valueEl');
+  private readonly cardRef  = viewChild<ElementRef<HTMLDivElement>>('card');
+  private readonly valueRef = viewChild<ElementRef<HTMLSpanElement>>('valueEl');
 
   private readonly zone = inject(NgZone);
 
   /* ── State ── */
-  private prevValue   = 0;
-  private isEntered   = false;
+  private prevValue = 0;
+  private isEntered = false;
+  private viewReady = false;
+  private pendingValue = 0;
 
   private tiltAnim?: ReturnType<typeof animate>;
 
@@ -249,9 +252,21 @@ export class AnimStatCardComponent implements OnDestroy {
     /* Count-up whenever value input changes */
     effect(() => {
       const target = this.value();
+      this.pendingValue = target;
+      if (!this.viewReady) return;
       this.zone.runOutsideAngular(() => this.countUp(this.prevValue, target));
       this.prevValue = target;
     });
+  }
+
+  ngAfterViewInit(): void {
+    this.viewReady = true;
+    const valueEl = this.valueRef()?.nativeElement;
+    if (valueEl) {
+      valueEl.textContent = '0';
+    }
+    this.zone.runOutsideAngular(() => this.countUp(0, this.pendingValue));
+    this.prevValue = this.pendingValue;
   }
 
   ngOnDestroy(): void {
@@ -277,10 +292,12 @@ export class AnimStatCardComponent implements OnDestroy {
 
   /* ─── 3D tilt on hover ───────────────────────────────────────────────────── */
   onMouseEnter(): void {
+    const card = this.cardRef()?.nativeElement;
+    if (!card) return;
     if (!this.isEntered) {
       this.isEntered = true;
       this.zone.runOutsideAngular(() => {
-        animate(this.cardRef().nativeElement, {
+        animate(card, {
           scale: 1.025,
           duration: 260,
           ease: spring({ stiffness: 200, damping: 20 }),
@@ -290,7 +307,8 @@ export class AnimStatCardComponent implements OnDestroy {
   }
 
   onMouseMove(e: MouseEvent): void {
-    const card = this.cardRef().nativeElement;
+    const card = this.cardRef()?.nativeElement;
+    if (!card) return;
     const rect = card.getBoundingClientRect();
     const cx = rect.left + rect.width  / 2;
     const cy = rect.top  + rect.height / 2;
@@ -304,7 +322,8 @@ export class AnimStatCardComponent implements OnDestroy {
 
   onMouseLeave(): void {
     this.isEntered = false;
-    const card = this.cardRef().nativeElement;
+    const card = this.cardRef()?.nativeElement;
+    if (!card) return;
     this.zone.runOutsideAngular(() => {
       this.tiltAnim?.cancel();
       this.tiltAnim = animate(card, {

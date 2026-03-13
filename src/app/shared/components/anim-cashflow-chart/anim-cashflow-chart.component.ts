@@ -205,35 +205,50 @@ export interface CashflowBar {
 export class AnimCashflowChartComponent implements AfterViewInit, OnDestroy {
   readonly data = input<CashflowBar[]>([]);
 
-  private readonly hostRef = viewChild.required<ElementRef<HTMLElement>>('host');
-  private readonly bodyRef = viewChild.required<ElementRef<HTMLElement>>('body');
+  private readonly hostRef = viewChild<ElementRef<HTMLElement>>('host');
+  private readonly bodyRef = viewChild<ElementRef<HTMLElement>>('body');
   private readonly zone    = inject(NgZone);
 
-  private observer!: IntersectionObserver;
+  private observer?: IntersectionObserver;
+  private viewReady = false;
+  private rafId = 0;
+  private barInAnim?: ReturnType<typeof animate>;
+  private barOutAnim?: ReturnType<typeof animate>;
+  private colAnim?: ReturnType<typeof animate>;
 
   constructor() {
     effect(() => {
       this.data();
-      setTimeout(() => this.animateBars(), 60);
+      this.scheduleAnimateBars();
     });
   }
 
   ngAfterViewInit(): void {
+    this.viewReady = true;
+    this.scheduleAnimateBars();
+
     this.zone.runOutsideAngular(() => {
       this.observer = new IntersectionObserver(
         (entries) => {
           if (entries[0]?.isIntersecting) {
             this.animateBars();
-            this.observer.disconnect();
+            this.observer?.disconnect();
           }
         },
         { threshold: 0.1 },
       );
-      this.observer.observe(this.hostRef().nativeElement);
+      const host = this.hostRef()?.nativeElement;
+      if (host) {
+        this.observer.observe(host);
+      }
     });
   }
 
   ngOnDestroy(): void {
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.colAnim?.cancel();
+    this.barInAnim?.cancel();
+    this.barOutAnim?.cancel();
     this.observer?.disconnect();
   }
 
@@ -256,15 +271,24 @@ export class AnimCashflowChartComponent implements AfterViewInit, OnDestroy {
   }
 
   private animateBars(): void {
+    if (!this.viewReady) return;
+
     this.zone.runOutsideAngular(() => {
-      const barsIn  = this.bodyRef().nativeElement.querySelectorAll<HTMLElement>('.bar--in');
-      const barsOut = this.bodyRef().nativeElement.querySelectorAll<HTMLElement>('.bar--out');
-      const cols    = this.bodyRef().nativeElement.querySelectorAll<HTMLElement>('.chart__col');
+      const body = this.bodyRef()?.nativeElement;
+      if (!body) return;
+
+      const barsIn  = body.querySelectorAll<HTMLElement>('.bar--in');
+      const barsOut = body.querySelectorAll<HTMLElement>('.bar--out');
+      const cols    = body.querySelectorAll<HTMLElement>('.chart__col');
 
       if (!cols.length) return;
 
+      this.colAnim?.cancel();
+      this.barInAnim?.cancel();
+      this.barOutAnim?.cancel();
+
       // Column stagger fade-in
-      animate(cols, {
+      this.colAnim = animate(cols, {
         opacity:    [0, 1],
         delay: stagger(60),
         ease: spring({ stiffness: 120, damping: 18 }),
@@ -272,19 +296,28 @@ export class AnimCashflowChartComponent implements AfterViewInit, OnDestroy {
 
       // Bar grow from bottom
       if (barsIn.length) {
-        animate(barsIn, {
+        this.barInAnim = animate(barsIn, {
           scaleY: [0, 1],
           delay: stagger(60, { start: 80 }),
           ease: spring({ stiffness: 85, damping: 14 }),
         });
       }
       if (barsOut.length) {
-        animate(barsOut, {
+        this.barOutAnim = animate(barsOut, {
           scaleY: [0, 1],
           delay: stagger(60, { start: 140 }),
           ease: spring({ stiffness: 85, damping: 14 }),
         });
       }
+    });
+  }
+
+  private scheduleAnimateBars(): void {
+    if (!this.viewReady) return;
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = requestAnimationFrame(() => {
+      this.rafId = 0;
+      this.animateBars();
     });
   }
 }

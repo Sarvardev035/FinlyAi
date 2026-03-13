@@ -1,10 +1,24 @@
-import { Component, ChangeDetectionStrategy, signal, computed, OnInit } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  NgZone,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { animate, stagger, spring } from 'animejs';
 import { UzsFormatPipe } from '../../shared';
 import { AnimStatCardComponent } from '../../shared/components/anim-stat-card/anim-stat-card.component';
 import { AnimTransactionListComponent } from '../../shared/components/anim-transaction-list/anim-transaction-list.component';
 import { AnimCashflowChartComponent, CashflowBar } from '../../shared/components/anim-cashflow-chart/anim-cashflow-chart.component';
+import { CurrencySceneComponent } from '../../shared/components/currency-scene/currency-scene.component';
 import { AccountService, TransactionService, IncomeService, DebtService, CurrencyService, FamilyService } from '../../core/services';
 import { Account, FamilyMember, FamilyPermission } from '../../models';
 import { TransactionCategory } from '../../models/transaction.model';
@@ -12,10 +26,12 @@ import { TransactionCategory } from '../../models/transaction.model';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, UzsFormatPipe, AnimStatCardComponent, AnimTransactionListComponent, AnimCashflowChartComponent],
+  imports: [CommonModule, FormsModule, UzsFormatPipe, AnimStatCardComponent, AnimTransactionListComponent, AnimCashflowChartComponent, CurrencySceneComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="dashboard">
+    <section #dashRoot class="dashboard">
+      <app-currency-scene class="dashboard__scene" [density]="64" />
+
       <!-- Hero -->
       <div class="hero anim-fade-down">
         <h1 class="hero__title">Good {{ getGreeting() }}, Sardor 👋</h1>
@@ -547,7 +563,34 @@ import { TransactionCategory } from '../../models/transaction.model';
     .anim-d6 { animation-delay: 480ms; }
 
     /* ===== Layout ===== */
-    .dashboard { display: flex; flex-direction: column; gap: 1.25rem; }
+    .dashboard {
+      position: relative;
+      isolation: isolate;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .dashboard__scene {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      opacity: 0.75;
+    }
+
+    .dashboard > :not(.dashboard__scene) {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero,
+    .stat-cards-row,
+    .cashflow-grid,
+    .section {
+      will-change: transform, opacity;
+      transform: translateZ(0);
+      backface-visibility: hidden;
+    }
 
     .hero { padding: 0.75rem 0 0; }
     .hero__title { font-size: 1.6rem; font-weight: 700; color: #fff; margin: 0; }
@@ -1196,7 +1239,12 @@ import { TransactionCategory } from '../../models/transaction.model';
     }
   `],
 })
-export class DashboardComponent implements OnInit {
+export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
+  private readonly rootRef = viewChild<ElementRef<HTMLElement>>('dashRoot');
+  private readonly zone = inject(NgZone);
+
+  private introAnim?: ReturnType<typeof animate>;
+
   readonly selectedAccount = signal<Account | null>(null);
   readonly actionMode = signal<'income' | 'expense'>('income');
   readonly amount = signal<number | null>(null);
@@ -1261,6 +1309,40 @@ export class DashboardComponent implements OnInit {
     this.accountService.loadAccounts();
     this.incomeService.loadIncomes();
     this.debtService.loadDebts();
+  }
+
+  ngAfterViewInit(): void {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+
+    this.zone.runOutsideAngular(() => {
+      requestAnimationFrame(() => this.playIntroMotion());
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.introAnim?.cancel();
+  }
+
+  private playIntroMotion(): void {
+    const root = this.rootRef()?.nativeElement;
+    if (!root) return;
+
+    const targets = root.querySelectorAll<HTMLElement>(
+      '.hero, .stat-cards-row > app-anim-stat-card, .cashflow-grid, .section',
+    );
+
+    if (!targets.length) return;
+
+    this.introAnim?.cancel();
+    this.introAnim = animate(targets, {
+      opacity: [0, 1],
+      translateY: [18, 0],
+      delay: stagger(75, { start: 40 }),
+      ease: spring({ stiffness: 92, damping: 16 }),
+      duration: 850,
+    });
   }
 
   getGreeting(): string {
