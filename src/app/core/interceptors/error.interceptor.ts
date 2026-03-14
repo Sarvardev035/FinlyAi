@@ -1,9 +1,15 @@
-import { HttpInterceptorFn, HttpRequest, HttpErrorResponse } from '@angular/common/http';
+import { HttpInterceptorFn, HttpRequest, HttpErrorResponse, HttpContextToken } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
 import { ToastService } from '../services/toast.service';
 import { environment } from '../../../environments/environment';
+
+/**
+ * Set this token on a request's HttpContext to suppress the global error toast.
+ * Useful for auth flows where the component shows its own inline error message.
+ */
+export const SUPPRESS_ERROR_TOAST = new HttpContextToken<boolean>(() => false);
 
 /**
  * Enforces HTTPS for all outgoing API requests in production.
@@ -22,10 +28,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(req).pipe(
     catchError((err: unknown) => {
-      if (err instanceof HttpErrorResponse) {
-        handleHttpError(err, toast, router);
-      } else {
-        toast.error('An unexpected error occurred. Please try again.');
+      const suppress = req.context.get(SUPPRESS_ERROR_TOAST);
+      if (!suppress) {
+        if (err instanceof HttpErrorResponse) {
+          handleHttpError(err, toast, router);
+        } else {
+          toast.error('An unexpected error occurred. Please try again.');
+        }
       }
       return throwError(() => err);
     }),

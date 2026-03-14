@@ -1,8 +1,9 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { lastValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { SUPPRESS_ERROR_TOAST } from '../interceptors/error.interceptor';
 
 /* ─── Public Types ─────────────────────────────────────────────────────────── */
 export interface User {
@@ -86,7 +87,9 @@ export class AuthService {
     this._isLoading.set(true);
     try {
       const res = await lastValueFrom(
-        this.http.post<ApiResponse<AuthTokens>>(`${this.base}/auth/register`, payload)
+        this.http.post<ApiResponse<AuthTokens>>(`${this.base}/auth/register`, payload, {
+          context: new HttpContext().set(SUPPRESS_ERROR_TOAST, true),
+        })
       );
       this.persistTokens(res.data);
       await this.fetchAndPersistUser();
@@ -101,7 +104,9 @@ export class AuthService {
     this._isLoading.set(true);
     try {
       const res = await lastValueFrom(
-        this.http.post<ApiResponse<AuthTokens>>(`${this.base}/auth/login`, payload)
+        this.http.post<ApiResponse<AuthTokens>>(`${this.base}/auth/login`, payload, {
+          context: new HttpContext().set(SUPPRESS_ERROR_TOAST, true),
+        })
       );
       this.persistTokens(res.data);
       await this.fetchAndPersistUser();
@@ -115,7 +120,9 @@ export class AuthService {
   private async fetchAndPersistUser(): Promise<void> {
     try {
       const res = await lastValueFrom(
-        this.http.get<ApiResponse<User>>(`${this.base}/users/me`)
+        this.http.get<ApiResponse<User>>(`${this.base}/users/me`, {
+          context: new HttpContext().set(SUPPRESS_ERROR_TOAST, true),
+        })
       );
       this.persistUser(res.data);
     } catch {

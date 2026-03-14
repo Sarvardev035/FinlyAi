@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   ChangeDetectionStrategy,
@@ -5,6 +6,7 @@ import {
   signal,
   OnInit,
 } from '@angular/core';
+import { OnDestroy } from '@angular/core';
 import {
   FormBuilder,
   FormGroup,
@@ -129,6 +131,11 @@ import { AuthService } from '../../../core/services/auth.service';
           Don't have an account?
           <a routerLink="/register" class="link">Create one</a>
         </p>
+
+        <div class="security-badge">
+          <span aria-hidden="true">🔒</span>
+          <span>256-bit SSL encrypted &amp; secure</span>
+        </div>
       </div>
     </div>
   `,
@@ -151,9 +158,9 @@ import { AuthService } from '../../../core/services/auth.service';
       pointer-events: none;
       animation: float 8s ease-in-out infinite;
     }
-    .orb--1 { width: 400px; height: 400px; background: radial-gradient(circle, #6c5ce7, transparent 70%); top: -100px; right: -80px; animation-delay: 0s; }
-    .orb--2 { width: 280px; height: 280px; background: radial-gradient(circle, #00d68f, transparent 70%); bottom: -60px; left: -40px; animation-delay: 3s; }
-    .orb--3 { width: 220px; height: 220px; background: radial-gradient(circle, #ffa94d, transparent 70%); top: 50%; left: 30%; animation-delay: 5s; }
+    .orb--1 { width: 400px; height: 400px; background: radial-gradient(circle, var(--accent), transparent 70%); top: -100px; right: -80px; }
+    .orb--2 { width: 280px; height: 280px; background: radial-gradient(circle, var(--success), transparent 70%); bottom: -60px; left: -40px; animation-delay: 3s; }
+    .orb--3 { width: 220px; height: 220px; background: radial-gradient(circle, var(--warning), transparent 70%); top: 50%; left: 30%; animation-delay: 5s; }
     @keyframes float {
       0%, 100% { transform: translateY(0) scale(1); }
       50%       { transform: translateY(-20px) scale(1.05); }
@@ -161,13 +168,13 @@ import { AuthService } from '../../../core/services/auth.service';
     .auth-card {
       position: relative; z-index: 1;
       width: 100%; max-width: 420px;
-      background: rgba(255, 255, 255, 0.045);
+      background: rgba(13,18,35,0.75);
       backdrop-filter: blur(28px);
       -webkit-backdrop-filter: blur(28px);
-      border: 1px solid rgba(255, 255, 255, 0.09);
-      border-radius: 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
       padding: 2.5rem 2.5rem 2rem;
-      box-shadow: 0 0 0 1px rgba(255,255,255,0.03), 0 24px 64px rgba(0,0,0,0.45);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.02), var(--shadow-xl);
     }
     @keyframes scaleIn {
       from { opacity: 0; transform: scale(0.94) translateY(16px); }
@@ -176,68 +183,73 @@ import { AuthService } from '../../../core/services/auth.service';
     .anim-scale-in { animation: scaleIn 0.45s cubic-bezier(0.34,1.56,0.64,1) both; }
     .brand { display: flex; align-items: center; gap: 0.45rem; margin-bottom: 1.25rem; }
     .brand__icon { font-size: 1.6rem; }
-    .brand__name { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; }
+    .brand__name { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.025em; }
     .auth-card__header { margin-bottom: 1.5rem; }
-    .auth-card__title { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 0.35rem; }
-    .auth-card__subtitle { color: rgba(255,255,255,0.45); font-size: 0.9rem; }
+    .auth-card__title { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.035em; margin-bottom: 0.4rem; color: var(--text-primary); }
+    .auth-card__subtitle { color: var(--text-secondary); font-size: 0.9rem; }
     .alert {
       display: flex; align-items: center; gap: 0.6rem;
-      padding: 0.8rem 1rem; border-radius: 0.75rem;
-      font-size: 0.875rem; font-weight: 500;
-      margin-bottom: 1.25rem;
-      animation: scaleIn 0.25s ease both;
+      padding: 0.875rem 1rem; border-radius: var(--radius);
+      font-size: var(--font-size-sm); font-weight: 500;
+      margin-bottom: var(--space-5); line-height: 1.5;
+      animation: scaleIn 0.25s ease both; border: 1px solid transparent;
     }
     .alert__icon { font-size: 1rem; }
-    .alert--danger { background: rgba(255,107,107,0.15); border: 1px solid rgba(255,107,107,0.3); color: #ff6b6b; }
-    .auth-form { display: flex; flex-direction: column; gap: 1.1rem; }
-    .field { display: flex; flex-direction: column; gap: 0.35rem; }
+    .alert--danger { background: var(--danger-bg); border-color: rgba(239,68,68,0.25); color: #fca5a5; }
+    .auth-form { display: flex; flex-direction: column; gap: 1.15rem; }
+    .field { display: flex; flex-direction: column; gap: 0.4rem; }
     .field__label-row { display: flex; justify-content: space-between; align-items: center; }
-    .field__label { font-size: 0.8rem; font-weight: 600; color: rgba(255,255,255,0.65); letter-spacing: 0.03em; text-transform: uppercase; }
+    .field__label { font-size: var(--font-size-xs); font-weight: 600; color: var(--text-secondary); letter-spacing: 0.05em; text-transform: uppercase; }
     .field__input-wrap { position: relative; display: flex; align-items: center; }
-    .field__icon { position: absolute; left: 0.9rem; font-size: 1rem; pointer-events: none; opacity: 0.55; user-select: none; }
+    .field__icon { position: absolute; left: 0.9rem; font-size: 0.95rem; pointer-events: none; opacity: 0.45; user-select: none; }
     .field__input {
       width: 100%;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 0.75rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       padding: 0.75rem 2.8rem 0.75rem 2.6rem;
-      color: #fff; font-size: 0.925rem;
+      color: var(--text-primary); font-size: var(--font-size-base);
       transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
     }
-    .field__input::placeholder { color: rgba(255,255,255,0.25); }
-    .field__input:focus { outline: none; border-color: var(--accent); background: rgba(108,92,231,0.06); box-shadow: 0 0 0 3px rgba(108,92,231,0.18); }
-    .field--error .field__input { border-color: var(--danger); background: rgba(255,107,107,0.05); }
-    .field--error .field__input:focus { box-shadow: 0 0 0 3px rgba(255,107,107,0.18); }
-    .field__toggle { position: absolute; right: 0.75rem; background: none; border: none; cursor: pointer; font-size: 1rem; padding: 0.2rem; opacity: 0.55; transition: opacity 0.2s; }
-    .field__toggle:hover { opacity: 1; }
-    .field__error { font-size: 0.78rem; color: var(--danger); font-weight: 500; padding-left: 0.15rem; }
-    .link { color: var(--accent); font-weight: 600; text-decoration: none; transition: opacity 0.2s; }
-    .link:hover { opacity: 0.8; text-decoration: underline; }
-    .link--small { font-size: 0.78rem; }
+    .field__input::placeholder { color: var(--text-tertiary); }
+    .field__input:focus { outline: none; border-color: var(--accent); background: rgba(99,102,241,0.05); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+    .field--error .field__input { border-color: var(--danger); background: var(--danger-bg); }
+    .field--error .field__input:focus { box-shadow: 0 0 0 3px rgba(239,68,68,0.15); }
+    .field__toggle { position: absolute; right: 0.75rem; background: none; border: none; cursor: pointer; font-size: 1rem; padding: 0.25rem; opacity: 0.45; transition: opacity 0.2s; color: var(--text-primary); }
+    .field__toggle:hover { opacity: 0.9; }
+    .field__error { font-size: var(--font-size-xs); color: #fca5a5; font-weight: 500; }
+    .link { color: var(--accent-light, var(--accent)); font-weight: 600; text-decoration: none; transition: opacity 0.2s; }
+    .link:hover { opacity: 0.75; text-decoration: underline; }
+    .link--small { font-size: var(--font-size-xs); }
     .btn-primary {
       display: flex; align-items: center; justify-content: center; gap: 0.6rem;
-      width: 100%; padding: 0.875rem;
-      background: linear-gradient(135deg, #6c5ce7 0%, #a78bfa 100%);
-      color: #fff; border: none; border-radius: 0.875rem;
-      font-size: 0.975rem; font-weight: 700; letter-spacing: 0.02em;
-      cursor: pointer; transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
-      box-shadow: 0 4px 20px rgba(108,92,231,0.35);
+      width: 100%; padding: 0.9rem;
+      background: linear-gradient(135deg, var(--accent-dark,#4F46E5) 0%, var(--accent-light,#818CF8) 100%);
+      color: #fff; border: none; border-radius: var(--radius-lg);
+      font-size: var(--font-size-base); font-weight: 700; letter-spacing: 0.02em;
+      cursor: pointer; transition: opacity 0.2s, transform 0.18s, box-shadow 0.2s;
+      box-shadow: var(--shadow-accent);
       margin-top: 0.25rem;
     }
-    .btn-primary:hover:not(:disabled) { opacity: 0.92; transform: translateY(-1px); box-shadow: 0 8px 28px rgba(108,92,231,0.45); }
+    .btn-primary:hover:not(:disabled) { opacity: 0.92; transform: translateY(-1px); box-shadow: 0 8px 32px rgba(99,102,241,0.5); }
     .btn-primary:active:not(:disabled) { transform: translateY(0); }
-    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
     .btn-primary--loading { cursor: wait; }
-    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    .spinner { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.65s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .auth-card__footer { text-align: center; font-size: 0.875rem; color: rgba(255,255,255,0.4); margin-top: 1.5rem; }
+    .auth-card__footer { text-align: center; font-size: var(--font-size-sm); color: var(--text-secondary); margin-top: 1.5rem; }
+    .security-badge {
+      display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+      margin-top: 1rem; font-size: var(--font-size-xs); color: var(--text-tertiary);
+      letter-spacing: 0.02em;
+    }
     @media (max-width: 500px) {
-      .auth-card { padding: 2rem 1.5rem 1.75rem; border-radius: 1.25rem; }
+      .auth-card { padding: 2rem 1.25rem 1.75rem; border-radius: var(--radius-lg); }
       .auth-card__title { font-size: 1.5rem; }
     }
   `],
 })
-export class LoginComponent implements OnInit {
+export class LoginComponent implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
@@ -251,6 +263,10 @@ export class LoginComponent implements OnInit {
   readonly cooldown = signal(0);
 
   private cooldownTimer?: ReturnType<typeof setInterval>;
+
+  ngOnDestroy(): void {
+    clearInterval(this.cooldownTimer);
+  }
 
   ngOnInit(): void {
     if (this.authService.isAuthenticated()) {
@@ -284,14 +300,7 @@ export class LoginComponent implements OnInit {
       });
       await this.router.navigate(['/dashboard']);
     } catch (err: unknown) {
-      // Handle both Error objects and HTTP error responses from backend
-      let msg = 'Sign-in failed. Please try again.';
-      if (err instanceof Error) {
-        msg = err.message;
-      } else if (err && typeof err === 'object' && 'error' in err) {
-        const httpErr = err as { error?: { message?: string } };
-        msg = httpErr.error?.message ?? msg;
-      }
+      const msg = resolveAuthError(err, 'sign-in');
       this.serverError.set(msg);
       this.startCooldown(5);
     } finally {
@@ -315,4 +324,29 @@ export class LoginComponent implements OnInit {
       }
     }, 1000);
   }
+}
+
+/** Maps raw HTTP errors to user-friendly inline messages for auth forms. */
+function resolveAuthError(err: unknown, action: 'sign-in' | 'registration'): string {
+  if (err instanceof HttpErrorResponse) {
+    if (err.status === 0) {
+      return 'Our servers are temporarily unreachable. Please check your connection and try again.';
+    }
+    if (err.status === 401 || err.status === 403) {
+      return 'Incorrect email or password. Please try again.';
+    }
+    if (err.status === 409) {
+      return 'An account with this email already exists. Try signing in instead.';
+    }
+    if (err.status === 429) {
+      return 'Too many attempts. Please wait a moment before trying again.';
+    }
+    if (err.status >= 500) {
+      return 'Our servers are experiencing issues. Please try again in a few minutes.';
+    }
+    const serverMsg = (err.error as Record<string, unknown>)?.['message'];
+    if (typeof serverMsg === 'string' && serverMsg.trim()) return serverMsg.trim();
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return `${action === 'sign-in' ? 'Sign-in' : 'Registration'} failed. Please try again.`;
 }

@@ -6,7 +6,7 @@
     "start": "ng serve",
     "build": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test fineco"
   },
   "prettier": {
     "printWidth": 100,
@@ -40,6 +40,8 @@
     "@angular/compiler-cli": "^21.2.3",
     "@types/three": "^0.183.1",
     "angular-cli-ghpages": "^3.0.2",
-    "typescript": "~5.9.2"
+    "jsdom": "^28.1.0",
+    "typescript": "~5.9.2",
+    "vitest": "^4.1.0"
   }
 }

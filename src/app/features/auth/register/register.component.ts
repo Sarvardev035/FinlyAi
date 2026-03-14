@@ -6,6 +6,7 @@ import {
   computed,
   OnInit,
 } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   FormBuilder,
   FormGroup,
@@ -277,19 +278,18 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
     }
     .orb--1 {
       width: 420px; height: 420px;
-      background: radial-gradient(circle, #6c5ce7, transparent 70%);
+      background: radial-gradient(circle, var(--accent), transparent 70%);
       top: -120px; left: -100px;
-      animation-delay: 0s;
     }
     .orb--2 {
       width: 320px; height: 320px;
-      background: radial-gradient(circle, #00d68f, transparent 70%);
+      background: radial-gradient(circle, var(--success), transparent 70%);
       bottom: -80px; right: -60px;
       animation-delay: 3s;
     }
     .orb--3 {
       width: 260px; height: 260px;
-      background: radial-gradient(circle, #ffa94d, transparent 70%);
+      background: radial-gradient(circle, var(--warning), transparent 70%);
       top: 40%; left: 60%;
       animation-delay: 5s;
     }
@@ -304,15 +304,14 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
       z-index: 1;
       width: 100%;
       max-width: 460px;
-      background: rgba(255, 255, 255, 0.045);
+      background: rgba(13,18,35,0.75);
       backdrop-filter: blur(28px);
       -webkit-backdrop-filter: blur(28px);
-      border: 1px solid rgba(255, 255, 255, 0.09);
-      border-radius: 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
       padding: 2.5rem 2.5rem 2rem;
       box-shadow:
-        0 0 0 1px rgba(255, 255, 255, 0.03),
-        0 24px 64px rgba(0, 0, 0, 0.45);
+        0 0 0 1px rgba(255,255,255,0.02), var(--shadow-xl);
     }
 
     @keyframes scaleIn {
@@ -330,9 +329,9 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
     }
     .brand__icon { font-size: 1.6rem; }
     .brand__name {
-      font-size: 1.3rem;
+      font-size: 1.2rem;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.025em;
     }
 
     /* ── Header text ────────────────────────────────────────────────────── */
@@ -340,11 +339,12 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
     .auth-card__title {
       font-size: 1.75rem;
       font-weight: 800;
-      letter-spacing: -0.03em;
-      margin-bottom: 0.35rem;
+      letter-spacing: -0.035em;
+      margin-bottom: 0.4rem;
+      color: var(--text-primary);
     }
     .auth-card__subtitle {
-      color: rgba(255, 255, 255, 0.45);
+      color: var(--text-secondary);
       font-size: 0.9rem;
     }
 
@@ -354,15 +354,16 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
       align-items: center;
       gap: 0.6rem;
       padding: 0.8rem 1rem;
-      border-radius: 0.75rem;
-      font-size: 0.875rem;
+      border-radius: var(--radius);
+      font-size: var(--font-size-sm);
       font-weight: 500;
       margin-bottom: 1.25rem;
       animation: scaleIn 0.25s ease both;
+      border: 1px solid transparent;
     }
     .alert__icon { font-size: 1rem; }
-    .alert--danger  { background: rgba(255, 107, 107, 0.15); border: 1px solid rgba(255, 107, 107, 0.3); color: #ff6b6b; }
-    .alert--success { background: rgba(0, 214, 143, 0.12);  border: 1px solid rgba(0, 214, 143, 0.3);  color: #00d68f; }
+    .alert--danger  { background: var(--danger-bg);  border-color: rgba(239,68,68,0.25);   color: #fca5a5; }
+    .alert--success { background: var(--success-bg); border-color: rgba(16,185,129,0.25);  color: #6ee7b7; }
 
     /* ── Form ───────────────────────────────────────────────────────────── */
     .auth-form { display: flex; flex-direction: column; gap: 1.1rem; }
@@ -370,10 +371,10 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
     /* ── Field ──────────────────────────────────────────────────────────── */
     .field { display: flex; flex-direction: column; gap: 0.35rem; }
     .field__label {
-      font-size: 0.8rem;
+      font-size: var(--font-size-xs);
       font-weight: 600;
-      color: rgba(255, 255, 255, 0.65);
-      letter-spacing: 0.03em;
+      color: var(--text-secondary);
+      letter-spacing: 0.05em;
       text-transform: uppercase;
     }
     .field__input-wrap {
@@ -384,34 +385,34 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
     .field__icon {
       position: absolute;
       left: 0.9rem;
-      font-size: 1rem;
+      font-size: 0.95rem;
       pointer-events: none;
-      opacity: 0.55;
+      opacity: 0.45;
       user-select: none;
     }
     .field__input {
       width: 100%;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 0.75rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       padding: 0.75rem 2.8rem 0.75rem 2.6rem;
-      color: #fff;
-      font-size: 0.925rem;
+      color: var(--text-primary);
+      font-size: var(--font-size-base);
       transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
     }
-    .field__input::placeholder { color: rgba(255, 255, 255, 0.25); }
+    .field__input::placeholder { color: var(--text-tertiary); }
     .field__input:focus {
       outline: none;
       border-color: var(--accent);
-      background: rgba(108, 92, 231, 0.06);
-      box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.18);
+      background: rgba(99,102,241,0.05);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
     }
     .field--error .field__input {
       border-color: var(--danger);
-      background: rgba(255, 107, 107, 0.05);
+      background: var(--danger-bg);
     }
     .field--error .field__input:focus {
-      box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.18);
+      box-shadow: 0 0 0 3px rgba(239,68,68,0.15);
     }
     .field__toggle {
       position: absolute;
@@ -421,15 +422,15 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
       cursor: pointer;
       font-size: 1rem;
       padding: 0.2rem;
-      opacity: 0.55;
+      opacity: 0.45;
       transition: opacity 0.2s;
+      color: var(--text-primary);
     }
-    .field__toggle:hover { opacity: 1; }
+    .field__toggle:hover { opacity: 0.9; }
     .field__error {
-      font-size: 0.78rem;
-      color: var(--danger);
+      font-size: var(--font-size-xs);
+      color: #fca5a5;
       font-weight: 500;
-      padding-left: 0.15rem;
     }
 
     /* ── Strength meter ──────────────────────────────────────────────────── */
@@ -679,13 +680,7 @@ export class RegisterComponent implements OnInit {
 
       setTimeout(() => this.router.navigate(['/dashboard']), 1200);
     } catch (err: unknown) {
-      let msg = 'Registration failed. Please try again.';
-      if (err instanceof Error) {
-        msg = err.message;
-      } else if (err && typeof err === 'object' && 'error' in err) {
-        const httpErr = err as { error?: { message?: string } };
-        msg = httpErr.error?.message ?? msg;
-      }
+      const msg = resolveAuthError(err, 'registration');
       this.serverError.set(msg);
       this.startCooldown(8);
     } finally {
@@ -711,4 +706,26 @@ export class RegisterComponent implements OnInit {
       }
     }, 1000);
   }
+}
+
+/** Maps raw HTTP errors to user-friendly inline messages for auth forms. */
+function resolveAuthError(err: unknown, action: 'sign-in' | 'registration'): string {
+  if (err instanceof HttpErrorResponse) {
+    if (err.status === 0) {
+      return 'Our servers are temporarily unreachable. Please check your connection and try again.';
+    }
+    if (err.status === 409) {
+      return 'An account with this email already exists. Try signing in instead.';
+    }
+    if (err.status === 429) {
+      return 'Too many attempts. Please wait a moment before trying again.';
+    }
+    if (err.status >= 500) {
+      return 'Our servers are experiencing issues. Please try again in a few minutes.';
+    }
+    const serverMsg = (err.error as Record<string, unknown>)?.['message'];
+    if (typeof serverMsg === 'string' && serverMsg.trim()) return serverMsg.trim();
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return `${action === 'sign-in' ? 'Sign-in' : 'Registration'} failed. Please try again.`;
 }
