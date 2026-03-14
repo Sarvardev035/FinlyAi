@@ -1,4 +1,4 @@
 window.__FINECO_CONFIG__ = {
-  apiBaseUrl: '/api',
-  enforceHttps: true,
+  // Optional runtime override for deployments.
+  // Example: apiBaseUrl: 'https://finly.uyqidir.uz/api'
 };
