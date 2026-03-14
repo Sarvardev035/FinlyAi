@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, signal, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { WalletCardComponent } from '../../shared';
@@ -355,12 +355,12 @@ export class WalletsComponent implements OnInit {
   keypadKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '000', '0', '⌫'];
   categories: TransactionCategory[] = ['Food', 'Taxi', 'Salary', 'Utilities', 'Shopping', 'Transfer', 'Freelance', 'Rent', 'Other'];
 
-  constructor(
-    public readonly accountService: AccountService,
-    public readonly transactionService: TransactionService,
-    public readonly currency: CurrencyService,
-    private readonly transferService: TransferService,
-  ) {}
+  readonly accountService = inject(AccountService);
+  readonly transactionService = inject(TransactionService);
+  readonly currency = inject(CurrencyService);
+  private readonly transferService = inject(TransferService);
+
+  constructor() {}
 
   ngOnInit(): void {
     this.accountService.loadAccounts();
