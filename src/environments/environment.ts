@@ -1,5 +1,7 @@
+import { resolveApiUrl, resolveHttps } from './runtime-config';
+
 export const environment = {
   production: false,
-  apiUrl: '/api',
-  enforceHttps: false,
+  apiUrl: resolveApiUrl('/api'),
+  enforceHttps: resolveHttps(false),
 };

@@ -1,5 +1,7 @@
+import { resolveApiUrl, resolveHttps } from './runtime-config';
+
 export const environment = {
   production: true,
-  apiUrl: 'https://finly.uyqidir.uz/api',
-  enforceHttps: true,
+  apiUrl: resolveApiUrl('/api'),
+  enforceHttps: resolveHttps(true),
 };

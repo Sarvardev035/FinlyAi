@@ -4,6 +4,7 @@ import {
   ChangeDetectionStrategy,
   inject,
   signal,
+  computed,
   OnInit,
 } from '@angular/core';
 import { OnDestroy } from '@angular/core';
@@ -28,7 +29,7 @@ import { AuthService } from '../../../core/services/auth.service';
       <div class="orb orb--2"></div>
       <div class="orb orb--3"></div>
 
-      <div class="auth-card anim-scale-in">
+      <div class="auth-card anim-scale-in" [class.auth-card--shake]="authShake()">
         <!-- Header -->
         <div class="auth-card__header">
           <div class="brand">
@@ -56,7 +57,11 @@ import { AuthService } from '../../../core/services/auth.service';
           class="auth-form"
         >
           <!-- Email -->
-          <div class="field" [class.field--error]="isInvalid('email')">
+          <div
+            class="field"
+            [class.field--error]="isInvalid('email')"
+            [class.field--pulse]="emailPulse()"
+          >
             <label class="field__label" for="email">Email Address</label>
             <div class="field__input-wrap">
               <span class="field__icon">✉</span>
@@ -77,7 +82,11 @@ import { AuthService } from '../../../core/services/auth.service';
           </div>
 
           <!-- Password -->
-          <div class="field" [class.field--error]="isInvalid('password')">
+          <div
+            class="field"
+            [class.field--error]="isInvalid('password')"
+            [class.field--pulse]="passwordPulse()"
+          >
             <div class="field__label-row">
               <label class="field__label" for="password">Password</label>
               <a href="#" class="link link--small" (click)="$event.preventDefault()">
@@ -196,6 +205,15 @@ import { AuthService } from '../../../core/services/auth.service';
     }
     .alert__icon { font-size: 1rem; }
     .alert--danger { background: var(--danger-bg); border-color: rgba(239,68,68,0.25); color: #fca5a5; }
+    .auth-card--shake { animation: shakeX 0.28s ease; }
+    @keyframes shakeX {
+      0% { transform: translateX(0); }
+      20% { transform: translateX(-7px); }
+      40% { transform: translateX(7px); }
+      60% { transform: translateX(-5px); }
+      80% { transform: translateX(5px); }
+      100% { transform: translateX(0); }
+    }
     .auth-form { display: flex; flex-direction: column; gap: 1.15rem; }
     .field { display: flex; flex-direction: column; gap: 0.4rem; }
     .field__label-row { display: flex; justify-content: space-between; align-items: center; }
@@ -215,6 +233,12 @@ import { AuthService } from '../../../core/services/auth.service';
     .field__input:focus { outline: none; border-color: var(--accent); background: rgba(99,102,241,0.05); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
     .field--error .field__input { border-color: var(--danger); background: var(--danger-bg); }
     .field--error .field__input:focus { box-shadow: 0 0 0 3px rgba(239,68,68,0.15); }
+    .field--pulse .field__input { animation: pulseDanger 0.42s ease; }
+    @keyframes pulseDanger {
+      0% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+      30% { box-shadow: 0 0 0 4px rgba(239,68,68,0.22); }
+      100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+    }
     .field__toggle { position: absolute; right: 0.75rem; background: none; border: none; cursor: pointer; font-size: 1rem; padding: 0.25rem; opacity: 0.45; transition: opacity 0.2s; color: var(--text-primary); }
     .field__toggle:hover { opacity: 0.9; }
     .field__error { font-size: var(--font-size-xs); color: #fca5a5; font-weight: 500; }
@@ -261,11 +285,20 @@ export class LoginComponent implements OnInit, OnDestroy {
   readonly isSubmitting = signal(false);
   readonly rateLimited = signal(false);
   readonly cooldown = signal(0);
+  readonly authShake = signal(false);
+  readonly emailPulse = signal(false);
+  readonly passwordPulse = signal(false);
+  readonly credentialError = computed(() => {
+    const msg = this.serverError().toLowerCase();
+    return msg.includes('incorrect email or password') || msg.includes('invalid email or password');
+  });
 
   private cooldownTimer?: ReturnType<typeof setInterval>;
+  private feedbackTimeouts: Array<ReturnType<typeof setTimeout>> = [];
 
   ngOnDestroy(): void {
     clearInterval(this.cooldownTimer);
+    this.feedbackTimeouts.forEach((id) => clearTimeout(id));
   }
 
   ngOnInit(): void {
@@ -302,9 +335,43 @@ export class LoginComponent implements OnInit, OnDestroy {
     } catch (err: unknown) {
       const msg = resolveAuthError(err, 'sign-in');
       this.serverError.set(msg);
+      this.triggerAuthFeedback(msg);
       this.startCooldown(5);
     } finally {
       this.isSubmitting.set(false);
+    }
+  }
+
+  private triggerAuthFeedback(message: string): void {
+    const msg = message.toLowerCase();
+
+    if (this.credentialError() || msg.includes('incorrect email or password') || msg.includes('invalid email or password')) {
+      this.authShake.set(false);
+      this.emailPulse.set(false);
+      this.passwordPulse.set(false);
+
+      // Restart animation classes in the next frame so repeated failures animate again.
+      this.feedbackTimeouts.push(
+        setTimeout(() => {
+          this.authShake.set(true);
+          this.emailPulse.set(true);
+          this.passwordPulse.set(true);
+
+          this.feedbackTimeouts.push(setTimeout(() => this.authShake.set(false), 300));
+          this.feedbackTimeouts.push(setTimeout(() => this.emailPulse.set(false), 450));
+          this.feedbackTimeouts.push(setTimeout(() => this.passwordPulse.set(false), 450));
+        }, 0),
+      );
+      return;
+    }
+
+    if (msg.includes('email')) {
+      this.emailPulse.set(true);
+      this.feedbackTimeouts.push(setTimeout(() => this.emailPulse.set(false), 450));
+    }
+    if (msg.includes('password')) {
+      this.passwordPulse.set(true);
+      this.feedbackTimeouts.push(setTimeout(() => this.passwordPulse.set(false), 450));
     }
   }
 

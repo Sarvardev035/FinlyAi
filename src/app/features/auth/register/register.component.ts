@@ -5,6 +5,7 @@ import {
   signal,
   computed,
   OnInit,
+  OnDestroy,
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -54,7 +55,7 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
       <div class="orb orb--2"></div>
       <div class="orb orb--3"></div>
 
-      <div class="auth-card anim-scale-in">
+      <div class="auth-card anim-scale-in" [class.auth-card--shake]="authShake()">
         <!-- Header -->
         <div class="auth-card__header">
           <div class="brand">
@@ -112,7 +113,11 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
           </div>
 
           <!-- Email -->
-          <div class="field" [class.field--error]="isInvalid('email')">
+          <div
+            class="field"
+            [class.field--error]="isInvalid('email')"
+            [class.field--pulse]="emailPulse()"
+          >
             <label class="field__label" for="email">Email Address</label>
             <div class="field__input-wrap">
               <span class="field__icon">✉</span>
@@ -133,7 +138,11 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
           </div>
 
           <!-- Password -->
-          <div class="field" [class.field--error]="isInvalid('password')">
+          <div
+            class="field"
+            [class.field--error]="isInvalid('password')"
+            [class.field--pulse]="passwordPulse()"
+          >
             <label class="field__label" for="password">Password</label>
             <div class="field__input-wrap">
               <span class="field__icon">🔒</span>
@@ -364,6 +373,15 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
     .alert__icon { font-size: 1rem; }
     .alert--danger  { background: var(--danger-bg);  border-color: rgba(239,68,68,0.25);   color: #fca5a5; }
     .alert--success { background: var(--success-bg); border-color: rgba(16,185,129,0.25);  color: #6ee7b7; }
+    .auth-card--shake { animation: shakeX 0.28s ease; }
+    @keyframes shakeX {
+      0% { transform: translateX(0); }
+      20% { transform: translateX(-7px); }
+      40% { transform: translateX(7px); }
+      60% { transform: translateX(-5px); }
+      80% { transform: translateX(5px); }
+      100% { transform: translateX(0); }
+    }
 
     /* ── Form ───────────────────────────────────────────────────────────── */
     .auth-form { display: flex; flex-direction: column; gap: 1.1rem; }
@@ -410,6 +428,12 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
     .field--error .field__input {
       border-color: var(--danger);
       background: var(--danger-bg);
+    }
+    .field--pulse .field__input { animation: pulseDanger 0.42s ease; }
+    @keyframes pulseDanger {
+      0% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+      30% { box-shadow: 0 0 0 4px rgba(239,68,68,0.22); }
+      100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
     }
     .field--error .field__input:focus {
       box-shadow: 0 0 0 3px rgba(239,68,68,0.15);
@@ -564,7 +588,7 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
     }
   `],
 })
-export class RegisterComponent implements OnInit {
+export class RegisterComponent implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
@@ -580,6 +604,9 @@ export class RegisterComponent implements OnInit {
   readonly isSubmitting = signal(false);
   readonly rateLimited = signal(false);
   readonly cooldown = signal(0);
+  readonly authShake = signal(false);
+  readonly emailPulse = signal(false);
+  readonly passwordPulse = signal(false);
 
   /* ── Derived ── */
   readonly passwordValue = computed(
@@ -590,6 +617,12 @@ export class RegisterComponent implements OnInit {
   );
 
   private cooldownTimer?: ReturnType<typeof setInterval>;
+  private feedbackTimeouts: Array<ReturnType<typeof setTimeout>> = [];
+
+  ngOnDestroy(): void {
+    clearInterval(this.cooldownTimer);
+    this.feedbackTimeouts.forEach((id) => clearTimeout(id));
+  }
 
   ngOnInit(): void {
     // Redirect if already authenticated
@@ -682,10 +715,33 @@ export class RegisterComponent implements OnInit {
     } catch (err: unknown) {
       const msg = resolveAuthError(err, 'registration');
       this.serverError.set(msg);
+      this.triggerAuthFeedback(msg);
       this.startCooldown(8);
     } finally {
       this.isSubmitting.set(false);
     }
+  }
+
+  private triggerAuthFeedback(message: string): void {
+    const msg = message.toLowerCase();
+    this.authShake.set(false);
+    this.emailPulse.set(false);
+    this.passwordPulse.set(false);
+
+    this.feedbackTimeouts.push(
+      setTimeout(() => {
+        if (msg.includes('email')) this.emailPulse.set(true);
+        if (msg.includes('password')) this.passwordPulse.set(true);
+
+        if (msg.includes('exists') || msg.includes('invalid') || msg.includes('failed')) {
+          this.authShake.set(true);
+        }
+
+        this.feedbackTimeouts.push(setTimeout(() => this.authShake.set(false), 300));
+        this.feedbackTimeouts.push(setTimeout(() => this.emailPulse.set(false), 450));
+        this.feedbackTimeouts.push(setTimeout(() => this.passwordPulse.set(false), 450));
+      }, 0),
+    );
   }
 
   /* ── Rate-limit cooldown ── */
