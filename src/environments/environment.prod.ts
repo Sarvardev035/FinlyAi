@@ -2,6 +2,8 @@ import { resolveApiUrl, resolveHttps } from './runtime-config';
 
 export const environment = {
   production: true,
-  apiUrl: resolveApiUrl('https://finly.uyqidir.uz/api'),
+  // Use relative /api so Vercel's proxy rewrite forwards requests to the
+  // backend server-side — this eliminates browser CORS entirely.
+  apiUrl: resolveApiUrl('/api'),
   enforceHttps: resolveHttps(true),
 };
