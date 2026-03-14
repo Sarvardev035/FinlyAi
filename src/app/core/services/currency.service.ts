@@ -35,6 +35,16 @@ export class CurrencyService {
     return this._rate();
   }
 
+  getRateBetween(from: string, to: string): number {
+    const src = from.toUpperCase();
+    const dst = to.toUpperCase();
+    if (src === dst) return 1;
+    if (src === 'USD' && dst === 'UZS') return this._rate();
+    if (src === 'UZS' && dst === 'USD') return 1 / this._rate();
+    // Fallback for unsupported pairs: keep amount unchanged.
+    return 1;
+  }
+
   toUSD(uzs: number): number {
     return uzs / this._rate();
   }
