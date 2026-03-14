@@ -46,7 +46,8 @@ export class CurrencySceneComponent implements AfterViewInit, OnDestroy {
   private scene?: THREE.Scene;
   private camera?: THREE.PerspectiveCamera;
   private points?: THREE.Points;
-  private pointVelocities: number[] = [];
+  private gridMesh?: THREE.LineSegments;
+  private basePositions?: Float32Array; // original x,y of grid points for wave offset
   private rafId = 0;
   private tickTime = 0;
   private isRunning = false;
@@ -77,9 +78,15 @@ export class CurrencySceneComponent implements AfterViewInit, OnDestroy {
     document.removeEventListener('visibilitychange', this.visibilityHandler);
     this.points?.geometry.dispose();
 
-    const material = this.points?.material;
-    if (this.three && material instanceof this.three.Material) {
-      material.dispose();
+    const pointMat = this.points?.material;
+    if (this.three && pointMat instanceof this.three.Material) {
+      pointMat.dispose();
+    }
+
+    this.gridMesh?.geometry.dispose();
+    const gridMat = this.gridMesh?.material;
+    if (this.three && gridMat instanceof this.three.Material) {
+      gridMat.dispose();
     }
 
     this.renderer?.dispose();
@@ -92,14 +99,13 @@ export class CurrencySceneComponent implements AfterViewInit, OnDestroy {
     const host = canvas.parentElement;
     if (!host) return;
 
-    const width = Math.max(host.clientWidth, 320);
+    const width  = Math.max(host.clientWidth,  320);
     const height = Math.max(host.clientHeight, 240);
     const isSmallScreen = width < 820;
 
-    this.scene = new this.three.Scene();
-
-    this.camera = new this.three.PerspectiveCamera(55, width / height, 0.1, 100);
-    this.camera.position.z = 5.5;
+    this.scene  = new this.three.Scene();
+    this.camera = new this.three.PerspectiveCamera(52, width / height, 0.1, 100);
+    this.camera.position.z = 5.8;
 
     this.renderer = new this.three.WebGLRenderer({
       canvas,
@@ -111,47 +117,77 @@ export class CurrencySceneComponent implements AfterViewInit, OnDestroy {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioCap));
     this.renderer.setSize(width, height, false);
 
-    const rawCount = Math.max(18, Math.round(this.density()));
-    const count = isSmallScreen ? Math.round(rawCount * 0.65) : rawCount;
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    this.pointVelocities = new Array(count).fill(0);
+    // ── 1. Subtle grid overlay (LineSegments) ──────────────────────────────
+    const cols = 14, rows = 9;
+    const gW = 9.0, gH = 5.8;
+    const linePositions: number[] = [];
 
-    const palette = [
-      new this.three.Color('#00d68f'),
-      new this.three.Color('#6c5ce7'),
-      new this.three.Color('#ffa94d'),
-      new this.three.Color('#0984e3'),
-    ];
-
-    for (let i = 0; i < count; i++) {
-      const idx = i * 3;
-      positions[idx] = (Math.random() - 0.5) * 8.5;
-      positions[idx + 1] = (Math.random() - 0.5) * 5.8;
-      positions[idx + 2] = (Math.random() - 0.5) * 2.6;
-      this.pointVelocities[i] = 0.0025 + Math.random() * 0.006;
-
-      const color = palette[i % palette.length];
-      colors[idx] = color.r;
-      colors[idx + 1] = color.g;
-      colors[idx + 2] = color.b;
+    for (let r = 0; r <= rows; r++) {
+      const y = -gH / 2 + (r / rows) * gH;
+      linePositions.push(-gW / 2, y, 0,  gW / 2, y, 0);
+    }
+    for (let c = 0; c <= cols; c++) {
+      const x = -gW / 2 + (c / cols) * gW;
+      linePositions.push(x, -gH / 2, 0,  x, gH / 2, 0);
     }
 
-    const geometry = new this.three.BufferGeometry();
-    geometry.setAttribute('position', new this.three.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new this.three.BufferAttribute(colors, 3));
+    const lineGeo = new this.three.BufferGeometry();
+    lineGeo.setAttribute('position', new this.three.BufferAttribute(new Float32Array(linePositions), 3));
+    const lineMat = new this.three.LineBasicMaterial({
+      color: 0x1a3a5c,
+      transparent: true,
+      opacity: 0.28,
+    });
+    this.gridMesh = new this.three.LineSegments(lineGeo, lineMat);
+    this.scene.add(this.gridMesh);
 
-    const material = new this.three.PointsMaterial({
-      size: 0.075,
+    // ── 2. Grid intersection points (wavy highlight nodes) ─────────────────
+    const nodeCount = (cols + 1) * (rows + 1);
+    const nodePos   = new Float32Array(nodeCount * 3);
+    const nodeColor = new Float32Array(nodeCount * 3);
+    this.basePositions = new Float32Array(nodeCount * 2); // store x,y base
+
+    // Professional fintech palette: deep teal + accent cyan + soft indigo
+    const palette = [
+      new this.three.Color('#0098a8'),
+      new this.three.Color('#00b4d8'),
+      new this.three.Color('#2d6a9f'),
+      new this.three.Color('#1e88e5'),
+    ];
+
+    let ni = 0;
+    for (let r = 0; r <= rows; r++) {
+      for (let c = 0; c <= cols; c++) {
+        const x = -gW / 2 + (c / cols) * gW;
+        const y = -gH / 2 + (r / rows) * gH;
+        nodePos[ni * 3]     = x;
+        nodePos[ni * 3 + 1] = y;
+        nodePos[ni * 3 + 2] = 0;
+        this.basePositions[ni * 2]     = x;
+        this.basePositions[ni * 2 + 1] = y;
+        const col = palette[(r + c) % palette.length];
+        nodeColor[ni * 3]     = col.r;
+        nodeColor[ni * 3 + 1] = col.g;
+        nodeColor[ni * 3 + 2] = col.b;
+        ni++;
+      }
+    }
+
+    const nodeGeo = new this.three.BufferGeometry();
+    nodeGeo.setAttribute('position', new this.three.BufferAttribute(nodePos, 3));
+    nodeGeo.setAttribute('color',    new this.three.BufferAttribute(nodeColor, 3));
+
+    const nodeMat = new this.three.PointsMaterial({
+      size: 0.055,
       sizeAttenuation: true,
       transparent: true,
-      opacity: 0.72,
+      opacity: 0.55,
       vertexColors: true,
       blending: this.three.AdditiveBlending,
       depthWrite: false,
     });
 
-    this.points = new this.three.Points(geometry, material);
+    this.points = new this.three.Points(nodeGeo, nodeMat);
     this.scene.add(this.points);
   }
 
@@ -162,30 +198,34 @@ export class CurrencySceneComponent implements AfterViewInit, OnDestroy {
     const tick = () => {
       if (!this.isRunning) return;
       this.rafId = requestAnimationFrame(tick);
-      if (!this.scene || !this.camera || !this.renderer || !this.points) return;
+      if (!this.scene || !this.camera || !this.renderer || !this.points || !this.basePositions) return;
 
-      this.tickTime += 0.0065;
+      this.tickTime += 0.007;
       const t = this.tickTime;
+
+      // Wave each grid node in Z — creates a rippling data-surface effect
       const positions = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
       const count = positions.count;
-
       for (let i = 0; i < count; i++) {
-        const x = positions.getX(i);
-        let y = positions.getY(i);
-        const z = positions.getZ(i);
-
-        y += this.pointVelocities[i];
-        if (y > 3.1) {
-          y = -3.1;
-        }
-
-        const drift = Math.sin((i * 0.7) + t) * 0.0017;
-        positions.setXYZ(i, x + drift, y, z + Math.cos(t + i * 0.2) * 0.0009);
+        const bx = this.basePositions[i * 2];
+        const by = this.basePositions[i * 2 + 1];
+        const z  = Math.sin(bx * 0.75 + t * 0.65) * 0.22
+                 + Math.cos(by * 0.9  + t * 0.5)  * 0.15;
+        positions.setZ(i, z);
       }
-
       positions.needsUpdate = true;
-      this.points.rotation.z = Math.sin(t * 0.42) * 0.06;
-      this.points.rotation.y = Math.cos(t * 0.32) * 0.08;
+
+      // Gently tilt the grid mesh to add depth — no full rotation
+      if (this.gridMesh) {
+        this.gridMesh.rotation.x = Math.sin(t * 0.18) * 0.06;
+        this.gridMesh.rotation.y = Math.cos(t * 0.13) * 0.04;
+      }
+      this.points.rotation.x = this.gridMesh?.rotation.x ?? 0;
+      this.points.rotation.y = this.gridMesh?.rotation.y ?? 0;
+
+      // Pulse opacity of the node layer
+      const mat = this.points.material as THREE.PointsMaterial;
+      mat.opacity = 0.38 + Math.sin(t * 0.55) * 0.18;
 
       this.renderer.render(this.scene, this.camera);
     };

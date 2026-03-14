@@ -2,7 +2,7 @@ import { Component, ChangeDetectionStrategy, signal, OnInit } from '@angular/cor
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { WalletCardComponent } from '../../shared';
-import { AccountService, TransactionService, CurrencyService } from '../../core/services';
+import { AccountService, TransactionService, CurrencyService, TransferService } from '../../core/services';
 import { Account, TransactionCategory, TransactionType } from '../../models';
 
 @Component({
@@ -14,7 +14,10 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
     <section class="wallets">
       <div class="wallets__header">
         <h2 class="section-title">💳 My Wallets</h2>
-        <button class="btn btn--accent" (click)="showAddCard.set(true)">+ Add Card</button>
+        <div class="wallets__actions">
+          <button class="btn btn--secondary" (click)="openTransferModal()">Transfer</button>
+          <button class="btn btn--accent" (click)="showAddCard.set(true)">+ Add Card</button>
+        </div>
       </div>
 
       <div class="wallets__grid">
@@ -42,28 +45,13 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
               <label class="field">
                 <span class="field__label">Wallet Type</span>
                 <select class="field__input" [(ngModel)]="newCardType">
-                  <option value="humo">Bank Card - HUMO</option>
-                  <option value="uzcard">Bank Card - UZCARD</option>
-                  <option value="visa">Bank Card - VISA</option>
-                  <option value="mastercard">Bank Card - MASTERCARD</option>
-                  <option value="cash">Cash Wallet</option>
+                  <option value="humo">💳 Bank Card — HUMO</option>
+                  <option value="uzcard">💳 Bank Card — UZCARD</option>
+                  <option value="visa">💎 Bank Card — VISA</option>
+                  <option value="mastercard">🔶 Bank Card — MASTERCARD</option>
+                  <option value="cash">💵 Cash Wallet</option>
                 </select>
               </label>
-              @if (isBankCard()) {
-                <label class="field">
-                  <span class="field__label">Card Number</span>
-                  <input
-                    class="field__input"
-                    [(ngModel)]="newCardNumber"
-                    placeholder="8600 1234 5678 9012"
-                    maxlength="23"
-                  />
-                </label>
-                <label class="field">
-                  <span class="field__label">Expiry (optional)</span>
-                  <input class="field__input" [(ngModel)]="newCardExpiry" placeholder="MM/YY" maxlength="5" />
-                </label>
-              }
               <label class="field">
                 <span class="field__label">Initial Balance (UZS)</span>
                 <input class="field__input" type="number" [(ngModel)]="newCardBalance" placeholder="0" />
@@ -117,6 +105,61 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
           </div>
         </div>
       }
+
+      <!-- Transfer Modal -->
+      @if (transferModalOpen()) {
+        <div class="modal-overlay" (click)="closeTransferModal()">
+          <div class="modal" (click)="$event.stopPropagation()">
+            <div class="modal__header">
+              <h3>🔄 Transfer Funds</h3>
+              <button class="modal__close" (click)="closeTransferModal()">✕</button>
+            </div>
+            <div class="modal__body">
+              <label class="field">
+                <span class="field__label">From Wallet</span>
+                <select class="field__input" [(ngModel)]="transferFromId" (ngModelChange)="refreshTransferPreview()">
+                  <option value="">Select source wallet</option>
+                  @for (account of accountService.allAccounts(); track account.id) {
+                    <option [value]="account.id">{{ account.name }} ({{ account.currency }})</option>
+                  }
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="field__label">To Wallet</span>
+                <select class="field__input" [(ngModel)]="transferToId" (ngModelChange)="refreshTransferPreview()">
+                  <option value="">Select destination wallet</option>
+                  @for (account of accountService.allAccounts(); track account.id) {
+                    <option [value]="account.id">{{ account.name }} ({{ account.currency }})</option>
+                  }
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="field__label">Amount</span>
+                <input class="field__input" type="number" [(ngModel)]="transferAmount" (ngModelChange)="refreshTransferPreview()" placeholder="0" />
+              </label>
+
+              <label class="field">
+                <span class="field__label">Note (optional)</span>
+                <input class="field__input" [(ngModel)]="transferDescription" placeholder="Rent split, savings transfer..." />
+              </label>
+
+              @if (transferPreviewText()) {
+                <div class="transfer-preview">{{ transferPreviewText() }}</div>
+              }
+
+              @if (transferError()) {
+                <div class="form-error">{{ transferError() }}</div>
+              }
+
+              <button class="btn btn--accent btn--full" [disabled]="transferBusy()" (click)="submitTransfer()">
+                {{ transferBusy() ? 'Transferring...' : 'Confirm Transfer' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </section>
   `,
   styles: [`
@@ -125,6 +168,11 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
       display: flex;
       align-items: center;
       justify-content: space-between;
+    }
+    .wallets__actions {
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
     }
     .section-title {
       font-size: 1.3rem;
@@ -148,6 +196,11 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
     }
     .btn:hover { opacity: 0.85; }
     .btn--accent { background: var(--accent); color: #fff; }
+    .btn--secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
     .btn--success { background: var(--success); color: #fff; }
     .btn--danger { background: var(--danger); color: #fff; }
     .btn--full { width: 100%; margin-top: 0.75rem; }
@@ -219,6 +272,14 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
       border-radius: 0.6rem;
       font-size: 0.82rem;
     }
+    .transfer-preview {
+      background: rgba(99,102,241,0.12);
+      border: 1px solid rgba(99,102,241,0.28);
+      color: #dbe1ff;
+      padding: 0.6rem 0.75rem;
+      border-radius: 0.6rem;
+      font-size: 0.83rem;
+    }
     .amount-display {
       text-align: center;
       font-size: 2rem;
@@ -271,8 +332,6 @@ export class WalletsComponent implements OnInit {
   addCardError = signal('');
   newCardName = '';
   newCardType: 'cash' | 'humo' | 'uzcard' | 'visa' | 'mastercard' = 'humo';
-  newCardNumber = '';
-  newCardExpiry = '';
   newCardBalance = 0;
 
   // Transaction modal state
@@ -283,6 +342,16 @@ export class WalletsComponent implements OnInit {
   txAccountId = signal('');
   txAmountText = '';
 
+  // Transfer modal state
+  transferModalOpen = signal(false);
+  transferBusy = signal(false);
+  transferError = signal('');
+  transferPreviewText = signal('');
+  transferFromId = '';
+  transferToId = '';
+  transferAmount = 0;
+  transferDescription = '';
+
   keypadKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '000', '0', '⌫'];
   categories: TransactionCategory[] = ['Food', 'Taxi', 'Salary', 'Utilities', 'Shopping', 'Transfer', 'Freelance', 'Rent', 'Other'];
 
@@ -290,14 +359,11 @@ export class WalletsComponent implements OnInit {
     public readonly accountService: AccountService,
     public readonly transactionService: TransactionService,
     public readonly currency: CurrencyService,
+    private readonly transferService: TransferService,
   ) {}
 
   ngOnInit(): void {
     this.accountService.loadAccounts();
-  }
-
-  isBankCard(): boolean {
-    return this.newCardType !== 'cash';
   }
 
   async addCard(): Promise<void> {
@@ -309,25 +375,13 @@ export class WalletsComponent implements OnInit {
       return;
     }
 
-    const cardNumberDigits = this.newCardNumber.replace(/\D/g, '');
-    if (this.isBankCard() && cardNumberDigits.length < 16) {
-      this.addCardError.set('Card number must be at least 16 digits.');
-      return;
-    }
-
-    if (this.newCardExpiry && !/^(0[1-9]|1[0-2])\/(\d{2})$/.test(this.newCardExpiry)) {
-      this.addCardError.set('Expiry must be in MM/YY format.');
-      return;
-    }
-
+    const isBankCard = this.newCardType !== 'cash';
     this.addCardBusy.set(true);
     const result = await this.accountService.addAccount({
       name,
-      walletType: this.isBankCard() ? 'bank_card' : 'cash',
-      cardType: this.isBankCard() ? this.newCardType.toUpperCase() as 'HUMO' | 'UZCARD' | 'VISA' | 'MASTERCARD' : undefined,
-      cardNumber: this.isBankCard() ? cardNumberDigits : undefined,
-      expiryDate: this.newCardExpiry || undefined,
-      initialBalance: this.newCardBalance,
+      walletType: isBankCard ? 'bank_card' : 'cash',
+      cardType: isBankCard ? this.newCardType.toUpperCase() as 'HUMO' | 'UZCARD' | 'VISA' | 'MASTERCARD' : undefined,
+      initialBalance: this.newCardBalance ?? 0,
     });
     this.addCardBusy.set(false);
 
@@ -338,8 +392,6 @@ export class WalletsComponent implements OnInit {
 
     this.newCardName = '';
     this.newCardType = 'humo';
-    this.newCardNumber = '';
-    this.newCardExpiry = '';
     this.newCardBalance = 0;
     this.showAddCard.set(false);
   }
@@ -355,6 +407,47 @@ export class WalletsComponent implements OnInit {
 
   closeTxModal(): void {
     this.txModalOpen.set(false);
+  }
+
+  openTransferModal(): void {
+    this.transferError.set('');
+    this.transferPreviewText.set('');
+    this.transferFromId = '';
+    this.transferToId = '';
+    this.transferAmount = 0;
+    this.transferDescription = '';
+    this.transferModalOpen.set(true);
+  }
+
+  closeTransferModal(): void {
+    this.transferModalOpen.set(false);
+  }
+
+  refreshTransferPreview(): void {
+    const preview = this.transferService.getPreview({
+      fromAccountId: this.transferFromId,
+      toAccountId: this.transferToId,
+      amount: this.transferAmount,
+      description: this.transferDescription,
+    });
+
+    if (!preview) {
+      this.transferPreviewText.set('');
+      return;
+    }
+
+    if (preview.fromCurrency === preview.toCurrency) {
+      this.transferPreviewText.set(`No conversion needed. ${preview.fromCurrency} to ${preview.toCurrency}.`);
+      return;
+    }
+
+    this.transferPreviewText.set(
+      `Rate: 1 ${preview.fromCurrency} = ${preview.exchangeRate.toFixed(4)} ${preview.toCurrency}. ` +
+      `Recipient gets ~${preview.convertedAmount.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} ${preview.toCurrency}`,
+    );
   }
 
   onKeypad(key: string): void {
@@ -376,6 +469,28 @@ export class WalletsComponent implements OnInit {
       this.txAccountId()
     );
     this.closeTxModal();
+  }
+
+  async submitTransfer(): Promise<void> {
+    this.transferError.set('');
+
+    this.refreshTransferPreview();
+
+    this.transferBusy.set(true);
+    const result = await this.transferService.transfer({
+      fromAccountId: this.transferFromId,
+      toAccountId: this.transferToId,
+      amount: this.transferAmount,
+      description: this.transferDescription,
+    });
+    this.transferBusy.set(false);
+
+    if (!result.ok) {
+      this.transferError.set(result.message ?? 'Transfer failed.');
+      return;
+    }
+
+    this.closeTransferModal();
   }
 
   getCategoryIcon(cat: TransactionCategory): string {
