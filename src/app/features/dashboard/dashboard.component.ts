@@ -19,6 +19,7 @@ import { AnimStatCardComponent } from '../../shared/components/anim-stat-card/an
 import { AnimTransactionListComponent } from '../../shared/components/anim-transaction-list/anim-transaction-list.component';
 import { AnimCashflowChartComponent, CashflowBar } from '../../shared/components/anim-cashflow-chart/anim-cashflow-chart.component';
 import { CurrencySceneComponent } from '../../shared/components/currency-scene/currency-scene.component';
+import { CurrencyExchangeComponent } from '../../shared/components/currency-exchange/currency-exchange.component';
 import { AccountService, TransactionService, IncomeService, DebtService, CurrencyService, FamilyService } from '../../core/services';
 import { Account, FamilyMember, FamilyPermission } from '../../models';
 import { TransactionCategory } from '../../models/transaction.model';
@@ -26,7 +27,7 @@ import { TransactionCategory } from '../../models/transaction.model';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, UzsFormatPipe, AnimStatCardComponent, AnimTransactionListComponent, AnimCashflowChartComponent, CurrencySceneComponent],
+  imports: [CommonModule, FormsModule, UzsFormatPipe, AnimStatCardComponent, AnimTransactionListComponent, AnimCashflowChartComponent, CurrencySceneComponent, CurrencyExchangeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section #dashRoot class="dashboard">
@@ -56,6 +57,11 @@ import { TransactionCategory } from '../../models/transaction.model';
           label="Expenses"
           variant="expense"
         />
+      </div>
+
+      <!-- Live Exchange Rates -->
+      <div class="section">
+        <app-currency-exchange />
       </div>
 
       <!-- Wallets -->

@@ -6,3 +6,4 @@ export { AnimTransactionListComponent } from './components/anim-transaction-list
 export { AnimCashflowChartComponent } from './components/anim-cashflow-chart/anim-cashflow-chart.component';
 export { SkeletonComponent } from './components/skeleton/skeleton.component';
 export { ToastOutletComponent } from './components/toast-outlet/toast-outlet.component';
+export { CurrencyExchangeComponent } from './components/currency-exchange/currency-exchange.component';

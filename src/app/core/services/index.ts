@@ -1,10 +1,12 @@
 export { AuthService } from './auth.service';
+export { ExchangeRatesService } from './exchange-rates.service';
 export { CurrencyService } from './currency.service';
 export { AccountService } from './account.service';
 export { DebtService } from './debt.service';
 export { IncomeService } from './income.service';
 export { BudgetService } from './budget.service';
 export { TransactionService } from './transaction.service';
+export { TransferService } from './transfer.service';
 export { FamilyService } from './family.service';
 export { GoalsService } from './goals.service';
 export { ToastService } from './toast.service';
