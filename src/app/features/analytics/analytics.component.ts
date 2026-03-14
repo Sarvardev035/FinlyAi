@@ -11,8 +11,17 @@ import {
 } from '../../core/services';
 import { SavingsGoal } from '../../models';
 
-type TimeRange = 'daily' | 'monthly' | 'yearly';
-type ChartMode = 'histogram' | 'treemap';
+type TimeRange = 'daily' | 'weekly' | 'monthly' | 'yearly';
+type ChartMode = 'histogram' | 'treemap' | 'calendar';
+
+interface CalendarDay {
+  day: number;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  income: number;
+  expense: number;
+  hasData: boolean;
+}
 
 interface BarData {
   label: string;
@@ -54,6 +63,12 @@ interface TreeNode {
               title="Tree Map"
               (click)="chartMode.set('treemap')"
             >🌳</button>
+            <button
+              class="toggle-btn"
+              [class.toggle-btn--active]="chartMode() === 'calendar'"
+              title="Calendar"
+              (click)="chartMode.set('calendar')"
+            >📅</button>
           </div>
         </div>
 
@@ -121,6 +136,53 @@ interface TreeNode {
             </div>
             @if (treeData().length === 0) {
               <div class="empty-mini">No expense data yet</div>
+            }
+          </div>
+        }
+
+        <!-- CALENDAR VIEW -->
+        @if (chartMode() === 'calendar') {
+          <div class="cal anim-scale-in">
+            <div class="cal__month-label">{{ calendarMonthLabel() }}</div>
+            <div class="cal__weekdays">
+              @for (d of calWeekdays; track d) { <span class="cal__wd">{{ d }}</span> }
+            </div>
+            <div class="cal__grid">
+              @for (cell of calendarData(); track $index) {
+                @if (cell.isCurrentMonth) {
+                  <button
+                    class="cal__cell"
+                    [class.cal__cell--today]="cell.isToday"
+                    [class.cal__cell--selected]="selectedCalDay() === cell.day"
+                    [class.cal__cell--has-data]="cell.hasData"
+                    (click)="selectedCalDay.set(selectedCalDay() === cell.day ? null : cell.day)"
+                  >
+                    <span class="cal__day">{{ cell.day }}</span>
+                    <div class="cal__dots">
+                      @if (cell.income > 0)  { <span class="cal__dot cal__dot--income"></span> }
+                      @if (cell.expense > 0) { <span class="cal__dot cal__dot--expense"></span> }
+                    </div>
+                  </button>
+                } @else {
+                  <div class="cal__cell cal__cell--empty"></div>
+                }
+              }
+            </div>
+
+            @if (selectedCalDay() !== null) {
+              <div class="cal__detail anim-scale-in">
+                <span class="cal__detail-title">{{ selectedCalDayLabel() }}</span>
+                @if (selectedDayTxs().length === 0) {
+                  <div class="empty-mini">No transactions on this day</div>
+                }
+                @for (tx of selectedDayTxs(); track tx.id) {
+                  <div class="cal__tx" [class.cal__tx--income]="tx.type === 'income'" [class.cal__tx--expense]="tx.type === 'expense'">
+                    <span class="cal__tx-cat">{{ tx.category }}</span>
+                    @if (tx.description) { <span class="cal__tx-desc">{{ tx.description }}</span> }
+                    <span class="cal__tx-amt">{{ tx.type === 'income' ? '+' : '−' }}{{ tx.amountUZS | uzsFormat }}</span>
+                  </div>
+                }
+              </div>
             }
           </div>
         }
@@ -532,6 +594,120 @@ interface TreeNode {
       font-size: 0.82rem;
     }
 
+    /* ===== CALENDAR ===== */
+    .cal { display: flex; flex-direction: column; gap: 0.75rem; }
+    .cal__month-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.6);
+    }
+    .cal__weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+    .cal__wd {
+      text-align: center;
+      font-size: 0.62rem;
+      color: rgba(255,255,255,0.3);
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 0.2rem 0;
+    }
+    .cal__grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .cal__cell {
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      border-radius: 0.5rem;
+      border: 1px solid transparent;
+      background: rgba(255,255,255,0.02);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.18s ease;
+      padding: 2px;
+    }
+    .cal__cell:hover {
+      background: rgba(108,92,231,0.1);
+      border-color: rgba(108,92,231,0.2);
+    }
+    .cal__cell--today {
+      border-color: var(--accent) !important;
+      background: rgba(108,92,231,0.08);
+    }
+    .cal__cell--selected {
+      background: rgba(108,92,231,0.18) !important;
+      border-color: var(--accent) !important;
+    }
+    .cal__cell--has-data { background: rgba(255,255,255,0.04); }
+    .cal__cell--empty { background: transparent; border: none; pointer-events: none; }
+    .cal__day {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.7);
+      line-height: 1;
+    }
+    .cal__cell--today .cal__day { color: var(--accent); }
+    .cal__dots { display: flex; gap: 2px; }
+    .cal__dot {
+      width: 4px; height: 4px;
+      border-radius: 50%;
+    }
+    .cal__dot--income  { background: var(--success); }
+    .cal__dot--expense { background: var(--danger); }
+
+    /* Calendar detail panel */
+    .cal__detail {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 0.85rem;
+      padding: 0.85rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+    .cal__detail-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.55);
+      margin-bottom: 0.15rem;
+    }
+    .cal__tx {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .cal__tx:last-child { border-bottom: none; }
+    .cal__tx-cat {
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.55);
+      min-width: 70px;
+    }
+    .cal__tx-desc {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.3);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .cal__tx-amt {
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-left: auto;
+    }
+    .cal__tx--income  .cal__tx-amt { color: var(--success); }
+    .cal__tx--expense .cal__tx-amt { color: var(--danger); }
+
     /* ===== LIMIT GUARDIAN ===== */
     .limit-cards {
       display: grid;
@@ -881,7 +1057,8 @@ export class AnalyticsComponent {
   newGoalTarget = 0;
   newGoalColor = '#0984e3';
 
-  readonly timeRanges: TimeRange[] = ['daily', 'monthly', 'yearly'];
+  readonly timeRanges: TimeRange[] = ['daily', 'weekly', 'monthly', 'yearly'];
+  readonly calWeekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   constructor(
     public readonly transactionService: TransactionService,
@@ -907,6 +1084,20 @@ export class AnalyticsComponent {
         label: d,
         income: Math.round((totalIncome / 7) * (0.5 + Math.random())),
         expense: Math.round((totalExpense / 7) * (0.5 + Math.random())),
+        maxVal,
+      }));
+    }
+
+    if (range === 'weekly') {
+      const weeks = ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'];
+      const qIncome = totalIncome / 4;
+      const qExpense = totalExpense / 4;
+      const maxVal = Math.max(qIncome * 1.4, qExpense * 1.4, 1);
+      const seeds = [0.9, 1.2, 0.7, 1.1];
+      return weeks.map((w, i) => ({
+        label: w,
+        income: Math.round(qIncome * seeds[i]),
+        expense: Math.round(qExpense * seeds[(i + 2) % 4]),
         maxVal,
       }));
     }
@@ -970,6 +1161,74 @@ export class AnalyticsComponent {
     const range = this.timeRange();
     return range === 'daily' ? this.goalsService.limits().daily : this.goalsService.limits().monthly;
   });
+
+  // ===== Calendar =====
+  readonly selectedCalDay = signal<number | null>(null);
+
+  readonly calendarData = computed<CalendarDay[]>(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const firstDow = new Date(year, month, 1).getDay(); // 0=Sun
+    const startDow = firstDow === 0 ? 6 : firstDow - 1; // convert to Mon=0
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const txMap = new Map<number, { income: number; expense: number }>();
+    for (const tx of this.transactionService.allTransactions()) {
+      const d = new Date(tx.date);
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        const day = d.getDate();
+        const entry = txMap.get(day) ?? { income: 0, expense: 0 };
+        if (tx.type === 'income') entry.income += tx.amountUZS;
+        else entry.expense += tx.amountUZS;
+        txMap.set(day, entry);
+      }
+    }
+
+    const days: CalendarDay[] = [];
+    for (let i = 0; i < startDow; i++) {
+      days.push({ day: 0, isCurrentMonth: false, isToday: false, income: 0, expense: 0, hasData: false });
+    }
+    const today = now.getDate();
+    for (let d = 1; d <= daysInMonth; d++) {
+      const data = txMap.get(d);
+      days.push({
+        day: d,
+        isCurrentMonth: true,
+        isToday: d === today,
+        income: data?.income ?? 0,
+        expense: data?.expense ?? 0,
+        hasData: !!data,
+      });
+    }
+    return days;
+  });
+
+  readonly selectedDayTxs = computed(() => {
+    const day = this.selectedCalDay();
+    if (day === null) return [];
+    const now = new Date();
+    return this.transactionService.allTransactions()
+      .filter(tx => {
+        const d = new Date(tx.date);
+        return d.getFullYear() === now.getFullYear() &&
+               d.getMonth() === now.getMonth() &&
+               d.getDate() === day;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  });
+
+  calendarMonthLabel(): string {
+    return new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  }
+
+  selectedCalDayLabel(): string {
+    const day = this.selectedCalDay();
+    if (day === null) return '';
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), day)
+      .toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
 
   readonly dangerLinePercent = computed(() => {
     const limit = this.currentLimit();

@@ -1,13 +1,13 @@
 import { Component, ChangeDetectionStrategy, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { UsdFormatPipe } from '../../shared';
-import { BudgetService } from '../../core/services';
+import { UzsFormatPipe } from '../../shared';
+import { BudgetService, CurrencyService } from '../../core/services';
 
 @Component({
   selector: 'app-budget',
   standalone: true,
-  imports: [CommonModule, FormsModule, UsdFormatPipe],
+  imports: [CommonModule, FormsModule, UzsFormatPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="budget">
@@ -23,7 +23,7 @@ import { BudgetService } from '../../core/services';
             <div class="budget-item__header">
               <span class="budget-item__category">{{ bp.budget.category }}</span>
               <span class="budget-item__amounts">
-                {{ bp.budget.usedUSD | usdFormat }} / {{ bp.budget.limitUSD | usdFormat }}
+                {{ currency.toUZS(bp.budget.usedUSD) | uzsFormat }} / {{ currency.toUZS(bp.budget.limitUSD) | uzsFormat }}
               </span>
             </div>
             <div class="progress">
@@ -36,7 +36,7 @@ import { BudgetService } from '../../core/services';
             <div class="budget-item__footer">
               <span class="budget-item__pct" [style.color]="bp.color">{{ bp.percentage }}%</span>
               <span class="budget-item__remaining">
-                {{ bp.budget.limitUSD - bp.budget.usedUSD | usdFormat }} remaining
+                {{ currency.toUZS(bp.budget.limitUSD - bp.budget.usedUSD) | uzsFormat }} remaining
               </span>
             </div>
           </div>
@@ -46,7 +46,7 @@ import { BudgetService } from '../../core/services';
       <!-- Total Summary -->
       <div class="total-bar">
         <span>Total Budget</span>
-        <span>{{ budgetService.totalUsed() | usdFormat }} / {{ budgetService.totalLimit() | usdFormat }}</span>
+        <span>{{ currency.toUZS(budgetService.totalUsed()) | uzsFormat }} / {{ currency.toUZS(budgetService.totalLimit()) | uzsFormat }}</span>
       </div>
 
       <!-- Family Sharing -->
@@ -79,7 +79,7 @@ import { BudgetService } from '../../core/services';
                 <input class="field__input" [(ngModel)]="newCategory" placeholder="e.g. Entertainment" />
               </label>
               <label class="field">
-                <span class="field__label">Limit (USD)</span>
+                <span class="field__label">Limit (UZS)</span>
                 <input class="field__input" type="number" [(ngModel)]="newLimit" placeholder="0" />
               </label>
               <button class="btn btn--accent btn--full" (click)="addBudget()">Add Budget</button>
@@ -205,7 +205,10 @@ export class BudgetComponent implements OnInit {
   newMemberName = '';
   newMemberColor = '#6c5ce7';
 
-  constructor(public readonly budgetService: BudgetService) {}
+  constructor(
+    public readonly budgetService: BudgetService,
+    public readonly currency: CurrencyService,
+  ) {}
 
   ngOnInit(): void {
     this.budgetService.loadBudgets();
@@ -213,7 +216,8 @@ export class BudgetComponent implements OnInit {
 
   addBudget(): void {
     if (!this.newCategory.trim() || this.newLimit <= 0) return;
-    this.budgetService.addBudget(this.newCategory, this.newLimit);
+    // newLimit is entered in UZS — convert to USD for storage
+    this.budgetService.addBudget(this.newCategory, this.currency.toUSD(this.newLimit));
     this.newCategory = '';
     this.newLimit = 0;
     this.showBudgetModal.set(false);
