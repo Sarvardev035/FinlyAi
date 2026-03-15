@@ -2,13 +2,14 @@ import { Component, ChangeDetectionStrategy, signal, OnInit, inject } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { WalletCardComponent } from '../../shared';
-import { AccountService, TransactionService, CurrencyService, TransferService } from '../../core/services';
-import { Account, TransactionCategory, TransactionType } from '../../models';
+import { AddPersonModalComponent } from '../../components/add-person-modal/add-person-modal.component';
+import { AccountService, TransactionService, CurrencyService, TransferService, PersonService } from '../../core/services';
+import { Account, Person, TransactionCategory, TransactionType } from '../../models';
 
 @Component({
   selector: 'app-wallets',
   standalone: true,
-  imports: [CommonModule, FormsModule, WalletCardComponent],
+  imports: [CommonModule, FormsModule, WalletCardComponent, AddPersonModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="wallets">
@@ -16,6 +17,7 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
         <h2 class="section-title">💳 My Wallets</h2>
         <div class="wallets__actions">
           <button class="btn btn--secondary" (click)="openTransferModal()">Transfer</button>
+          <button class="btn btn--secondary add-person-btn" (click)="openAddPersonModal()">+ Add Person</button>
           <button class="btn btn--accent" (click)="showAddCard.set(true)">+ Add Card</button>
         </div>
       </div>
@@ -28,6 +30,42 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
           />
         }
       </div>
+
+      <!-- Persons Section -->
+      <div class="persons-section">
+        <div class="section-header">
+          <h3>👥 My People</h3>
+          <button class="btn btn--secondary add-person-btn" (click)="openAddPersonModal()">
+            + Add Person
+          </button>
+        </div>
+
+        @if (!persons.length) {
+          <p class="persons-empty">Add your first person to track expenses separately.</p>
+        }
+
+        <div class="persons-grid">
+          @for (person of persons; track person.id) {
+            <div class="person-card">
+              <div class="person-avatar">{{ person.avatar }}</div>
+              <div class="person-name">{{ person.name }}</div>
+              <div class="person-balance">{{ currency.formatUZS(person.balance) }}</div>
+              <div class="person-actions">
+                <button (click)="openExpenseModal(person)">- Expense</button>
+                <button (click)="openIncomeModal(person)">+ Income</button>
+              </div>
+              <button class="person-delete" (click)="deletePerson(person.id)">Remove</button>
+            </div>
+          }
+        </div>
+      </div>
+
+      @if (addPersonModalOpen()) {
+        <app-add-person-modal
+          (cancel)="closeAddPersonModal()"
+          (create)="createPerson($event)"
+        />
+      }
 
       <!-- Add Card Modal -->
       @if (showAddCard()) {
@@ -189,6 +227,7 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
       display: flex;
       gap: 0.6rem;
       align-items: center;
+      flex-wrap: wrap;
     }
     .section-title {
       font-size: 1.3rem;
@@ -340,6 +379,86 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
       border-color: var(--accent);
       color: #fff;
     }
+    .persons-section {
+      margin-top: 0.6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+    }
+    .section-header h3 {
+      margin: 0;
+      color: #fff;
+      font-size: 1.05rem;
+    }
+    .add-person-btn {
+      background: linear-gradient(135deg, #2563eb, #06b6d4);
+      color: #fff;
+    }
+    .persons-empty {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.55);
+      font-size: 0.9rem;
+    }
+    .persons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 0.8rem;
+    }
+    .person-card {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 1rem;
+      padding: 1rem;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .person-avatar {
+      font-size: 2rem;
+      margin-bottom: 0.25rem;
+    }
+    .person-name {
+      color: #fff;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .person-balance {
+      color: #7dd3fc;
+      margin: 0.45rem 0;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .person-actions {
+      display: flex;
+      gap: 0.45rem;
+      margin-top: 0.65rem;
+    }
+    .person-actions button {
+      flex: 1;
+      padding: 0.45rem;
+      border-radius: 0.55rem;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.8rem;
+    }
+    .person-delete {
+      margin-top: 0.6rem;
+      background: transparent;
+      border: none;
+      color: rgba(255, 255, 255, 0.55);
+      font-size: 0.78rem;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 0.15rem;
+    }
   `],
 })
 export class WalletsComponent implements OnInit {
@@ -358,7 +477,11 @@ export class WalletsComponent implements OnInit {
   txCategory = signal<TransactionCategory>('Food');
   txAmount = signal(0);
   txAccountId = signal('');
+  txPersonId = signal<string | null>(null);
   txAmountText = '';
+
+  addPersonModalOpen = signal(false);
+  persons: Person[] = [];
 
   // Transfer modal state
   transferModalOpen = signal(false);
@@ -376,12 +499,65 @@ export class WalletsComponent implements OnInit {
   readonly accountService = inject(AccountService);
   readonly transactionService = inject(TransactionService);
   readonly currency = inject(CurrencyService);
+  private readonly personService = inject(PersonService);
   private readonly transferService = inject(TransferService);
 
   constructor() {}
 
   ngOnInit(): void {
     this.accountService.loadAccounts();
+    this.loadPersons();
+  }
+
+  loadPersons(): void {
+    this.personService.getPersons().subscribe({
+      next: (persons) => {
+        this.persons = persons;
+      },
+      error: (err) => {
+        console.error('Failed to load persons', err);
+        this.persons = [];
+      },
+    });
+  }
+
+  openAddPersonModal(): void {
+    this.addPersonModalOpen.set(true);
+  }
+
+  closeAddPersonModal(): void {
+    this.addPersonModalOpen.set(false);
+  }
+
+  createPerson(payload: { name: string; avatar: string }): void {
+    this.personService.createPerson(payload).subscribe({
+      next: (person) => {
+        this.onPersonCreated(person);
+        this.closeAddPersonModal();
+      },
+      error: (err) => {
+        console.error('Failed to create person', err);
+      },
+    });
+  }
+
+  onPersonCreated(person: Person): void {
+    this.persons = [...this.persons, person];
+  }
+
+  deletePerson(id: string): void {
+    this.personService.deletePerson(id).subscribe({
+      next: () => {
+        this.persons = this.persons.filter((p) => p.id !== id);
+      },
+      error: (err) => {
+        console.error('Failed to delete person', err);
+      },
+    });
+  }
+
+  deleteperson(id: string): void {
+    this.deletePerson(id);
   }
 
   async addCard(): Promise<void> {
@@ -434,10 +610,31 @@ export class WalletsComponent implements OnInit {
 
   openTransaction(ev: { account: Account; type: 'expense' | 'income' }): void {
     this.txAccountId.set(ev.account.id);
+    this.txPersonId.set(null);
     this.txType.set(ev.type);
     this.txAmount.set(0);
     this.txAmountText = '';
     this.txCategory.set('Food');
+    this.txModalOpen.set(true);
+  }
+
+  openExpenseModal(person: Person): void {
+    this.txAccountId.set('');
+    this.txPersonId.set(person.id);
+    this.txType.set('expense');
+    this.txAmount.set(0);
+    this.txAmountText = '';
+    this.txCategory.set('Food');
+    this.txModalOpen.set(true);
+  }
+
+  openIncomeModal(person: Person): void {
+    this.txAccountId.set('');
+    this.txPersonId.set(person.id);
+    this.txType.set('income');
+    this.txAmount.set(0);
+    this.txAmountText = '';
+    this.txCategory.set('Salary');
     this.txModalOpen.set(true);
   }
 
@@ -498,6 +695,31 @@ export class WalletsComponent implements OnInit {
   submitTransaction(): void {
     const amount = this.txAmount();
     if (amount <= 0) return;
+
+    const personId = this.txPersonId();
+    if (personId) {
+      const payload = {
+        type: this.txType(),
+        category: this.txCategory(),
+        amount,
+      };
+
+      this.personService.addPersonExpense(personId, payload).subscribe({
+        next: () => {
+          this.persons = this.persons.map((p) => {
+            if (p.id !== personId) return p;
+            const delta = this.txType() === 'expense' ? -amount : amount;
+            return { ...p, balance: p.balance + delta };
+          });
+          this.closeTxModal();
+        },
+        error: (err) => {
+          console.error('Failed to record person transaction', err);
+        },
+      });
+      return;
+    }
+
     this.transactionService.addTransaction(
       this.txType(),
       this.txCategory(),

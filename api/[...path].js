@@ -1,9 +1,15 @@
 'use strict';
 
 const DEFAULT_BACKEND_BASE = 'https://finly.uyqidir.uz/api';
+const DEFAULT_FRONTEND_ORIGIN = 'https://finly-ai-one.vercel.app';
 
 function getBackendBase() {
   const raw = process.env.BACKEND_API_BASE || DEFAULT_BACKEND_BASE;
+  return raw.endsWith('/') ? raw.slice(0, -1) : raw;
+}
+
+function getAllowedFrontendOrigin() {
+  const raw = process.env.FRONTEND_ORIGIN || DEFAULT_FRONTEND_ORIGIN;
   return raw.endsWith('/') ? raw.slice(0, -1) : raw;
 }
 
@@ -32,10 +38,14 @@ function sanitizeHeaders(incoming) {
 }
 
 module.exports = async function handler(req, res) {
+  const allowedOrigin = getAllowedFrontendOrigin();
+  const requestOrigin = typeof req.headers.origin === 'string' ? req.headers.origin : '';
+  const allowOriginHeader = requestOrigin === allowedOrigin ? requestOrigin : allowedOrigin;
+
   if (req.method === 'OPTIONS') {
     // Handle preflight at the edge so the browser never reaches backend CORS policy.
     res.status(204)
-      .setHeader('Access-Control-Allow-Origin', req.headers.origin || '*')
+      .setHeader('Access-Control-Allow-Origin', allowOriginHeader)
       .setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
       .setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'Content-Type, Authorization, X-XSRF-TOKEN')
       .setHeader('Access-Control-Max-Age', '86400')
@@ -103,7 +113,7 @@ module.exports = async function handler(req, res) {
     res.setHeader('Content-Type', contentType);
 
     // Keep CORS permissive for robustness if this endpoint is ever called cross-origin.
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.setHeader('Access-Control-Allow-Origin', allowOriginHeader);
     res.setHeader('Vary', 'Origin');
 
     res.send(text);
