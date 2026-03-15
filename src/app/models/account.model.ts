@@ -5,7 +5,7 @@ export interface Account {
   name: string;
   type: AccountType;
   balanceUZS: number;
-  currency: 'UZS';
+  currency: 'UZS' | 'USD' | string;
   isActive: boolean;
   createdAt: Date;
 }

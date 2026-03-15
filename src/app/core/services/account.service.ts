@@ -6,13 +6,15 @@ import { CurrencyService } from './currency.service';
 import { ApiService } from './api.service';
 
 interface BackendAccount {
-  id: string;
+  id: string | number;
   name: string;
-  type: string;
+  type?: string | null;
   cardType?: string | null;
-  currency: string;
-  balance: number;
-  createdAt: string;
+  card_type?: string | null;
+  currency?: string | null;
+  balance?: number | string | null;
+  createdAt?: string | null;
+  created_at?: string | null;
 }
 
 export interface CreateAccountInput {
@@ -52,15 +54,22 @@ export class AccountService {
   loadAccounts(): void {
     this.api.getAccounts().subscribe({
       next: (res) => {
-        const mapped: Account[] = (res.data as BackendAccount[]).map((a) => ({
-          id: a.id,
-          name: a.name,
-          type: this.mapBackendType(a.type, a.cardType),
-          balanceUZS: Math.round(a.balance * this.currency.getExchangeRate()),
-          currency: 'UZS',
-          isActive: true,
-          createdAt: new Date(a.createdAt),
-        }));
+        const rows = Array.isArray(res?.data) ? (res.data as BackendAccount[]) : [];
+        const mapped: Account[] = rows.map((a) => {
+          const normalizedCurrency = a.currency?.toUpperCase() || 'UZS';
+          const rawType = (a.type ?? '').toString();
+          const rawCardType = a.cardType ?? a.card_type ?? null;
+          const createdAt = a.createdAt ?? a.created_at;
+          return {
+            id: String(a.id),
+            name: a.name,
+            type: this.mapBackendType(rawType, rawCardType),
+            balanceUZS: this.normalizeToUZS(Number(a.balance ?? 0), normalizedCurrency),
+            currency: normalizedCurrency,
+            isActive: true,
+            createdAt: createdAt ? new Date(createdAt) : new Date(),
+          };
+        });
         this.accounts.set(mapped);
         this._loaded = true;
       },
@@ -77,7 +86,8 @@ export class AccountService {
   async addAccount(input: CreateAccountInput): Promise<ActionResult> {
     const payload = {
       name: input.name.trim(),
-      type: input.walletType === 'cash' ? 'CASH' : 'BANK_CARD',
+      // Backend enum commonly accepts CASH/CARD/BANK variants.
+      type: input.walletType === 'cash' ? 'CASH' : 'CARD',
       currency: 'UZS',
       initialBalance: Math.max(input.initialBalance, 0),
       cardType: input.walletType === 'bank_card' ? (input.cardType ?? null) : null,
@@ -118,13 +128,28 @@ export class AccountService {
   }
 
   private mapBackendType(type: string, cardType?: string | null): string {
-    if (type === 'BANK_CARD') {
-      return (cardType ?? 'VISA').toLowerCase();
+    const t = (type ?? '').toUpperCase();
+    const c = (cardType ?? '').toUpperCase();
+
+    if (t === 'CARD' || t === 'BANK_CARD' || t === 'BANK') {
+      if (c === 'HUMO' || c === 'UZCARD' || c === 'VISA' || c === 'MASTERCARD') {
+        return c.toLowerCase();
+      }
+      return 'visa';
     }
-    if (type === 'CASH') {
-      return 'cash';
-    }
-    return type.toLowerCase();
+
+    if (t === 'CASH') return 'cash';
+    if (t === 'EWALLET') return 'crypto';
+    if (t === 'SAVINGS') return 'cash';
+
+    return t ? t.toLowerCase() : 'cash';
+  }
+
+  private normalizeToUZS(amount: number, currency: string): number {
+    const c = currency.toUpperCase();
+    if (c === 'UZS') return Math.round(amount);
+    if (c === 'USD') return Math.round(this.currency.toUZS(amount));
+    return Math.round(amount * this.currency.getExchangeRate());
   }
 
   private extractErrorMessage(err: unknown): string {

@@ -5,11 +5,12 @@ import { filter, map } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { AuthService } from './core/services/auth.service';
 import { ToastOutletComponent } from './shared/components/toast-outlet/toast-outlet.component';
+import { HelpBotComponent } from './shared/components/help-bot/help-bot.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, ToastOutletComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, ToastOutletComponent, HelpBotComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!isAuthRoute()) {
@@ -81,6 +82,9 @@ import { ToastOutletComponent } from './shared/components/toast-outlet/toast-out
       <router-outlet />
     </main>
     <app-toast-outlet />
+    @if (!isAuthRoute()) {
+      <app-help-bot />
+    }
   `,
   styleUrl: './app.scss',
 })
