@@ -211,7 +211,7 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
               </button>
             </div>
             @if (isConfirmInvalid()) {
-              <span class="field__error">Passwords do not match</span>
+              <span class="field__error">{{ getConfirmError() }}</span>
             }
           </div>
 
@@ -223,9 +223,10 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
                 formControlName="terms"
                 id="terms"
                 class="checkbox-wrap__input"
+                aria-labelledby="termsLabel"
               />
               <span class="checkbox-wrap__box" aria-hidden="true"></span>
-              <span class="checkbox-wrap__text">
+              <span class="checkbox-wrap__text" id="termsLabel">
                 I agree to the
                 <a href="#" class="link" (click)="$event.preventDefault()">Terms of Service</a>
                 and
@@ -241,7 +242,7 @@ function strongPasswordValidator(control: AbstractControl): ValidationErrors | n
           <button
             type="submit"
             class="btn-primary"
-            [disabled]="isSubmitting() || rateLimited()"
+            [disabled]="isSubmitting() || rateLimited() || form.invalid"
             [class.btn-primary--loading]="isSubmitting()"
           >
             @if (isSubmitting()) {
@@ -660,6 +661,12 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.form.get('password')?.valueChanges.subscribe(() => {
       this.form.get('confirmPassword')?.updateValueAndValidity({ onlySelf: true });
     });
+
+    // Clear stale server messages as soon as the user edits the form.
+    this.form.valueChanges.subscribe(() => {
+      if (this.serverError()) this.serverError.set('');
+      if (this.successMsg()) this.successMsg.set('');
+    });
   }
 
   /* ── Field helpers ── */
@@ -672,7 +679,14 @@ export class RegisterComponent implements OnInit, OnDestroy {
   isConfirmInvalid(): boolean {
     const ctrl = this.form.get('confirmPassword');
     const mismatch = this.form.hasError('passwordsMismatch');
-    return !!(ctrl?.touched && mismatch);
+    return !!(ctrl?.touched && (ctrl.hasError('required') || mismatch));
+  }
+
+  getConfirmError(): string {
+    const ctrl = this.form.get('confirmPassword');
+    if (ctrl?.hasError('required')) return 'Please confirm your password';
+    if (this.form.hasError('passwordsMismatch')) return 'Passwords do not match';
+    return 'Invalid value';
   }
 
   getError(field: string): string {
@@ -697,8 +711,11 @@ export class RegisterComponent implements OnInit, OnDestroy {
   async onSubmit(): Promise<void> {
     this.form.markAllAsTouched();
     this.serverError.set('');
+    this.successMsg.set('');
 
-    if (this.form.invalid || this.rateLimited()) return;
+    if (this.form.invalid || this.rateLimited()) {
+      return;
+    }
 
     this.isSubmitting.set(true);
 
