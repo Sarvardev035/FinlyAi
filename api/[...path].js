@@ -43,9 +43,12 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const parts = Array.isArray(req.query.path)
-    ? req.query.path
-    : (req.query.path ? [req.query.path] : []);
+  const rawPath = req.query.path;
+  const parts = Array.isArray(rawPath)
+    ? rawPath
+    : (typeof rawPath === 'string' && rawPath.length
+      ? rawPath.split('/').filter(Boolean)
+      : []);
 
   const upstreamPath = parts.map((p) => encodeURIComponent(String(p))).join('/');
   const backendBase = getBackendBase();
