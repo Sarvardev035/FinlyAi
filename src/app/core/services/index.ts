@@ -10,6 +10,7 @@ export { TransferService } from './transfer.service';
 export { FamilyService } from './family.service';
 export { GoalsService } from './goals.service';
 export { PersonService } from './person.service';
+export { ChatbotService } from './chatbot.service';
 export { ToastService } from './toast.service';
 export { LoadingState } from './loading-state';
 export type { Toast, ToastLevel } from './toast.service';

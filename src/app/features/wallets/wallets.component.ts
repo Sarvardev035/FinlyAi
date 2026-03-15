@@ -58,6 +58,10 @@ import { Account, Person, TransactionCategory, TransactionType } from '../../mod
             </div>
           }
         </div>
+
+        @if (personError()) {
+          <div class="form-error">{{ personError() }}</div>
+        }
       </div>
 
       @if (addPersonModalOpen()) {
@@ -482,6 +486,7 @@ export class WalletsComponent implements OnInit {
 
   addPersonModalOpen = signal(false);
   persons: Person[] = [];
+  personError = signal('');
 
   // Transfer modal state
   transferModalOpen = signal(false);
@@ -513,10 +518,23 @@ export class WalletsComponent implements OnInit {
     this.personService.getPersons().subscribe({
       next: (persons) => {
         this.persons = persons;
+        this.personError.set('');
       },
       error: (err) => {
-        console.error('Failed to load persons', err);
+        console.error('Full error object:', err);
+        console.error('Error status:', err?.status);
+        console.error('Error message:', err?.message);
+        console.error('API URL being called:', err?.url);
         this.persons = [];
+        if (err?.status === 404) {
+          this.personError.set('Persons API not found. Please contact backend support.');
+          return;
+        }
+        if (err?.status === 500) {
+          this.personError.set('Server error while loading people. Please try again shortly.');
+          return;
+        }
+        this.personError.set('Could not load people. Please try again.');
       },
     });
   }
@@ -533,6 +551,7 @@ export class WalletsComponent implements OnInit {
     this.personService.createPerson(payload).subscribe({
       next: (person) => {
         this.onPersonCreated(person);
+        this.personError.set('');
         this.closeAddPersonModal();
       },
       error: (err) => {
@@ -702,6 +721,7 @@ export class WalletsComponent implements OnInit {
         type: this.txType(),
         category: this.txCategory(),
         amount,
+        note: `${this.txType()} via wallets modal`,
       };
 
       this.personService.addPersonExpense(personId, payload).subscribe({

@@ -167,7 +167,7 @@ export class AddPersonModalComponent {
   @Output() create = new EventEmitter<{ name: string; avatar: string }>();
 
   name = '';
-  readonly avatars = ['👦', '👧', '👨', '👩', '👴', '👵'];
+  readonly avatars = ['👦', '👧', '👨', '👩', '👴', '👵', '👶'];
   readonly selectedAvatar = signal('👦');
 
   canCreate(): boolean {

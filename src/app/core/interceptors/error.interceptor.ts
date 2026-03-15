@@ -28,6 +28,14 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(req).pipe(
     catchError((err: unknown) => {
+      if (err instanceof HttpErrorResponse) {
+        console.group('API ERROR');
+        console.error('URL:', err.url ?? req.url);
+        console.error('Status:', err.status, err.statusText);
+        console.error('Message:', extractMessage(err.error as Record<string, unknown> | null) ?? err.message);
+        console.groupEnd();
+      }
+
       const suppress = req.context.get(SUPPRESS_ERROR_TOAST);
       if (!suppress) {
         if (err instanceof HttpErrorResponse) {

@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ChatbotService, ChatMessage } from '../../../core/services/chatbot.service';
 
-type BotItem = { from: 'bot' | 'user'; text: string };
+type BotItem = { from: 'bot' | 'user'; text: string; time: string };
 
 @Component({
   selector: 'app-help-bot',
@@ -29,7 +30,18 @@ type BotItem = { from: 'bot' | 'user'; text: string };
 
         <div class="bot-messages">
           @for (m of messages(); track $index) {
-            <div class="msg" [class.msg--user]="m.from === 'user'">{{ m.text }}</div>
+            <div class="msg-wrap" [class.msg-wrap--user]="m.from === 'user'">
+              <div class="msg" [class.msg--user]="m.from === 'user'">{{ m.text }}</div>
+              <div class="msg-time">{{ m.time }}</div>
+            </div>
+          }
+
+          @if (isLoading()) {
+            <div class="msg-wrap">
+              <div class="msg typing" aria-label="Assistant typing">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
           }
         </div>
 
@@ -37,10 +49,11 @@ type BotItem = { from: 'bot' | 'user'; text: string };
           <input
             [(ngModel)]="draft"
             name="assistantQuestion"
-            placeholder="Type your question..."
+            placeholder="Ask me anything about your finances..."
             autocomplete="off"
+            (keydown.enter)="submit()"
           />
-          <button type="submit">Send</button>
+          <button type="submit" [disabled]="isLoading()">Send</button>
         </form>
       </section>
     }
@@ -110,6 +123,15 @@ type BotItem = { from: 'bot' | 'user'; text: string };
       max-height: 38vh;
       padding-right: 0.2rem;
     }
+    .msg-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.12rem;
+    }
+    .msg-wrap--user {
+      align-items: flex-end;
+    }
     .msg {
       align-self: flex-start;
       background: rgba(255,255,255,0.07);
@@ -125,6 +147,11 @@ type BotItem = { from: 'bot' | 'user'; text: string };
       align-self: flex-end;
       background: rgba(99,102,241,0.2);
       border-color: rgba(129,140,248,0.38);
+    }
+    .msg-time {
+      color: rgba(255,255,255,0.42);
+      font-size: 0.66rem;
+      padding: 0 0.25rem;
     }
     .bot-input {
       display: flex;
@@ -148,16 +175,36 @@ type BotItem = { from: 'bot' | 'user'; text: string };
       font-size: 0.78rem;
       cursor: pointer;
     }
+    .typing span {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #a855f7;
+      margin: 0 2px;
+      animation: bounce 1.2s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-8px); }
+    }
   `],
 })
 export class HelpBotComponent {
+  private readonly chatbot = inject(ChatbotService);
+
   readonly open = signal(false);
   readonly messages = signal<BotItem[]>([
     {
       from: 'bot',
-      text: 'Hi! I can help with wallets, transfers, budgets, and login issues. Ask anything.',
+      text: 'Hi! I am FinEco AI. I can help with wallets, people tracking, budgets, debts, and money advice. What do you need?',
+      time: this.getTime(),
     },
   ]);
+  readonly isLoading = signal(false);
+  private readonly chatHistory = signal<ChatMessage[]>([]);
 
   draft = '';
   readonly quickQuestions = [
@@ -172,11 +219,32 @@ export class HelpBotComponent {
   }
 
   ask(question: string): void {
-    this.append('user', question);
-    this.append('bot', this.answer(question));
+    const userMessage = question.trim();
+    if (!userMessage) return;
+
+    this.append('user', userMessage);
+    this.chatHistory.update((history) => [...history, { role: 'user', content: userMessage }]);
+    this.isLoading.set(true);
+
+    this.chatbot.sendMessage(userMessage, this.chatHistory()).subscribe({
+      next: (response) => {
+        const reply = response?.choices?.[0]?.message?.content?.trim()
+          || 'I had trouble generating a response. Please try again.';
+
+        this.chatHistory.update((history) => [...history, { role: 'assistant', content: reply }]);
+        this.append('bot', reply);
+        this.isLoading.set(false);
+      },
+      error: (err: unknown) => {
+        console.error('Chatbot error:', err);
+        this.append('bot', 'Connection issue detected. Please verify API key/network and try again.');
+        this.isLoading.set(false);
+      },
+    });
   }
 
   submit(): void {
+    if (this.isLoading()) return;
     const q = this.draft.trim();
     if (!q) return;
     this.draft = '';
@@ -184,28 +252,10 @@ export class HelpBotComponent {
   }
 
   private append(from: 'bot' | 'user', text: string): void {
-    this.messages.update((items) => [...items, { from, text }]);
+    this.messages.update((items) => [...items, { from, text, time: this.getTime() }]);
   }
 
-  private answer(raw: string): string {
-    const q = raw.toLowerCase();
-
-    if (q.includes('add') && (q.includes('wallet') || q.includes('card'))) {
-      return 'Go to Wallets > + Add Card. Fill wallet name, type, and initial balance, then save.';
-    }
-
-    if (q.includes('transfer')) {
-      return 'Go to Wallets > Transfer. Pick source and destination wallets, enter amount, and confirm. If currencies differ, conversion preview appears automatically.';
-    }
-
-    if (q.includes('login') || q.includes('password') || q.includes('email')) {
-      return 'Use your registered email/password. If invalid, the form highlights fields and shows inline error details. You can reset and try again.';
-    }
-
-    if (q.includes('budget')) {
-      return 'Open Budget section, set monthly limits by category, then compare plan vs actual spending in analytics.';
-    }
-
-    return 'I can help with wallet setup, transfers, budgets, debts, and troubleshooting. Try asking one of the quick questions.';
+  private getTime(): string {
+    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 }
