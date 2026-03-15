@@ -44,11 +44,22 @@ module.exports = async function handler(req, res) {
   }
 
   const rawPath = req.query.path;
-  const parts = Array.isArray(rawPath)
+  const pathFromQuery = Array.isArray(rawPath)
     ? rawPath
     : (typeof rawPath === 'string' && rawPath.length
       ? rawPath.split('/').filter(Boolean)
       : []);
+
+  const pathFromUrl = (() => {
+    try {
+      const url = new URL(req.url || '/', 'http://localhost');
+      return url.pathname.replace(/^\/api\/?/i, '').split('/').filter(Boolean);
+    } catch {
+      return [];
+    }
+  })();
+
+  const parts = pathFromQuery.length ? pathFromQuery : pathFromUrl;
 
   const upstreamPath = parts.map((p) => encodeURIComponent(String(p))).join('/');
   const backendBase = getBackendBase();
