@@ -86,8 +86,7 @@ export class AccountService {
   async addAccount(input: CreateAccountInput): Promise<ActionResult> {
     const payload = {
       name: input.name.trim(),
-      // Backend enum commonly accepts CASH/CARD/BANK variants.
-      type: input.walletType === 'cash' ? 'CASH' : 'CARD',
+      type: input.walletType === 'cash' ? 'CASH' : 'BANK_CARD',
       currency: 'UZS',
       initialBalance: Math.max(input.initialBalance, 0),
       cardType: input.walletType === 'bank_card' ? (input.cardType ?? null) : null,

@@ -56,6 +56,22 @@ import { Account, TransactionCategory, TransactionType } from '../../models';
                 <span class="field__label">Initial Balance (UZS)</span>
                 <input class="field__input" type="number" [(ngModel)]="newCardBalance" placeholder="0" />
               </label>
+              @if (newCardType !== 'cash') {
+                <label class="field">
+                  <span class="field__label">Card Number</span>
+                  <input
+                    class="field__input"
+                    [(ngModel)]="newCardNumber"
+                    placeholder="16-digit card number"
+                    inputmode="numeric"
+                    maxlength="19"
+                  />
+                </label>
+                <label class="field">
+                  <span class="field__label">Expiry Date</span>
+                  <input class="field__input" [(ngModel)]="newCardExpiry" placeholder="MM/YY" maxlength="5" />
+                </label>
+              }
               @if (addCardError()) {
                 <div class="form-error">{{ addCardError() }}</div>
               }
@@ -333,6 +349,8 @@ export class WalletsComponent implements OnInit {
   newCardName = '';
   newCardType: 'cash' | 'humo' | 'uzcard' | 'visa' | 'mastercard' = 'humo';
   newCardBalance = 0;
+  newCardNumber = '';
+  newCardExpiry = '';
 
   // Transaction modal state
   txModalOpen = signal(false);
@@ -376,11 +394,27 @@ export class WalletsComponent implements OnInit {
     }
 
     const isBankCard = this.newCardType !== 'cash';
+    const cardNumber = this.newCardNumber.replace(/\s+/g, '');
+    const expiry = this.newCardExpiry.trim();
+
+    if (isBankCard) {
+      if (!/^\d{12,19}$/.test(cardNumber)) {
+        this.addCardError.set('Card number must be 12-19 digits.');
+        return;
+      }
+      if (expiry && !/^(0[1-9]|1[0-2])\/(\d{2})$/.test(expiry)) {
+        this.addCardError.set('Expiry date must be in MM/YY format.');
+        return;
+      }
+    }
+
     this.addCardBusy.set(true);
     const result = await this.accountService.addAccount({
       name,
       walletType: isBankCard ? 'bank_card' : 'cash',
       cardType: isBankCard ? this.newCardType.toUpperCase() as 'HUMO' | 'UZCARD' | 'VISA' | 'MASTERCARD' : undefined,
+      cardNumber: isBankCard ? cardNumber : undefined,
+      expiryDate: isBankCard ? (expiry || undefined) : undefined,
       initialBalance: this.newCardBalance ?? 0,
     });
     this.addCardBusy.set(false);
@@ -393,6 +427,8 @@ export class WalletsComponent implements OnInit {
     this.newCardName = '';
     this.newCardType = 'humo';
     this.newCardBalance = 0;
+    this.newCardNumber = '';
+    this.newCardExpiry = '';
     this.showAddCard.set(false);
   }
 
