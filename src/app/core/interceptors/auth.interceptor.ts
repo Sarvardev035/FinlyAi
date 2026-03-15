@@ -5,8 +5,11 @@ import { environment } from '../../../environments/environment';
 const isOwnApi = (url: string): boolean =>
   url.startsWith(environment.apiUrl) || url.startsWith('/api');
 
+const isPublicAuthEndpoint = (url: string): boolean =>
+  /\/api\/auth\/(login|register)(\?|$|\/)/i.test(url);
+
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  if (!isOwnApi(req.url)) return next(req);
+  if (!isOwnApi(req.url) || isPublicAuthEndpoint(req.url)) return next(req);
 
   const token = localStorage.getItem('fineco_jwt');
 

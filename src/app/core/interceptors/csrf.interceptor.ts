@@ -1,7 +1,12 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 
+const isPublicAuthEndpoint = (url: string): boolean =>
+  /\/api\/auth\/(login|register)(\?|$|\/)/i.test(url);
+
 export const csrfInterceptor: HttpInterceptorFn = (req, next) => {
   const csrfToken = getCookie('XSRF-TOKEN');
+
+  if (isPublicAuthEndpoint(req.url)) return next(req);
 
   if (csrfToken && !req.method.match(/^(GET|HEAD|OPTIONS)$/i)) {
     const cloned = req.clone({
