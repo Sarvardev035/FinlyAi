@@ -82,6 +82,12 @@ function handleHttpError(
       toast.error(serverMsg ?? 'The requested resource was not found.');
       break;
 
+    case 405:
+      toast.error(
+        serverMsg ?? 'This endpoint does not allow the request method used (HTTP 405).',
+      );
+      break;
+
     case 409:
       toast.error(serverMsg ?? 'This action conflicts with existing data (e.g. duplicate entry).');
       break;

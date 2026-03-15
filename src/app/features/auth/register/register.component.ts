@@ -787,6 +787,9 @@ function resolveAuthError(err: unknown, action: 'sign-in' | 'registration'): str
     if (err.status === 0) {
       return 'Our servers are temporarily unreachable. Please check your connection and try again.';
     }
+    if (err.status === 405) {
+      return 'Registration endpoint rejected this method (HTTP 405). Please contact support if this persists.';
+    }
     if (err.status === 409) {
       return 'An account with this email already exists. Try signing in instead.';
     }
